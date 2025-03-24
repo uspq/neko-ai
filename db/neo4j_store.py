@@ -1,10 +1,10 @@
 from neo4j import GraphDatabase
 from typing import List, Dict, Any, Optional, Tuple
 import jieba.analyse
-from app.core.config import settings
-from app.utils.logger import logger
-from app.models.memory import Memory
-from app.core.memory_store import memory_store
+from core.config import settings
+from utils.logger import logger
+from models.memory import Memory
+from core.memory_store import memory_store
 
 def extract_topic(text: str, top_k=3) -> str:
     """从文本中提取主题关键词

@@ -6,8 +6,8 @@ import psutil
 import time
 from datetime import datetime
 
-from app.core.config import settings
-from app.utils.logger import api_logger
+from core.config import settings
+from utils.logger import api_logger
 
 router = APIRouter()
 

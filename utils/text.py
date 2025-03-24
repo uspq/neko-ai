@@ -2,7 +2,7 @@ import re
 import jieba
 import jieba.analyse
 from typing import List, Dict, Any, Tuple
-from app.utils.logger import logger
+from utils.logger import logger
 
 def extract_topic(text: str, top_k: int = 3) -> str:
     """从文本中提取主题关键词

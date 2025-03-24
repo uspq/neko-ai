@@ -3,11 +3,11 @@ from datetime import datetime
 import os
 from openai import OpenAI
 
-from app.core.config import settings
-from app.utils.logger import logger
-from app.models.chat import ChatResponse, TokenCost
-from app.services.memory_service import MemoryService
-from app.utils.text import calculate_tokens_and_cost
+from core.config import settings
+from utils.logger import logger
+from models.chat import ChatResponse, TokenCost
+from services.memory_service import MemoryService
+from utils.text import calculate_tokens_and_cost
 
 class ChatService:
     def __init__(self):

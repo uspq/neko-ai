@@ -1,9 +1,9 @@
 from fastapi import APIRouter, HTTPException, Path, Query, BackgroundTasks
 from typing import List, Dict, Any, Optional
 
-from app.models.memory import MemoryCreate, MemoryResponse, MemorySearchRequest, MemorySearchResponse, MemoryStatistics
-from app.services.memory_service import MemoryService
-from app.utils.logger import api_logger
+from models.memory import MemoryCreate, MemoryResponse, MemorySearchRequest, MemorySearchResponse, MemoryStatistics
+from services.memory_service import MemoryService
+from utils.logger import api_logger
 
 router = APIRouter()
 

@@ -4,9 +4,9 @@ import numpy as np
 import faiss
 from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime
-from app.core.config import settings
-from app.utils.logger import logger
-from app.models.memory import Memory
+from core.config import settings
+from utils.logger import logger
+from models.memory import Memory
 
 class FAISSMemoryStore:
     def __init__(self, dimension=None, index_type=None, index_path=None):

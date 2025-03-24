@@ -1,8 +1,8 @@
 import numpy as np
 import requests
 from typing import List, Dict, Any, Union
-from app.core.config import settings
-from app.utils.logger import logger
+from core.config import settings
+from utils.logger import logger
 
 def get_embedding(text: str) -> np.ndarray:
     """使用 API 获取文本嵌入向量"""

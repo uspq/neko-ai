@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException
 from typing import List, Dict, Any
 
-from app.models.chat import ChatRequest, ChatResponse, TokenCost
-from app.services.chat_service import ChatService
-from app.utils.logger import api_logger
+from models.chat import ChatRequest, ChatResponse, TokenCost
+from services.chat_service import ChatService
+from utils.logger import api_logger
 
 router = APIRouter()
 chat_service = ChatService()

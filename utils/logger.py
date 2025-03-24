@@ -1,7 +1,7 @@
 import os
 import logging
 from logging.handlers import RotatingFileHandler
-from app.core.config import settings
+from core.config import settings
 
 def setup_logger(name="neko", log_file="neko.log"):
     """配置日志记录器"""
