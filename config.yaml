@@ -1,0 +1,87 @@
+# Persistent-memory-Neko 配置文件
+
+# API 配置
+api:
+  key: "sk-jivwbgqsesocbzkggntyzjwlkvlyhuiaphesburlvyswzsfc"
+  base_url: "https://api.siliconflow.cn/v1"
+  timeout: 30
+  auth_enabled: true
+  rate_limit: 60
+
+# 模型配置
+model:
+  name: "Pro/deepseek-ai/DeepSeek-V3"
+  temperature: 0.7
+  max_tokens: 4096
+  top_p: 0.9
+  frequency_penalty: 0
+  presence_penalty: 0
+
+# 嵌入模型配置
+embedding:
+  model: "BAAI/bge-large-zh-v1.5"
+  timeout: 30
+  dimension: 1024
+
+# 重排序配置
+rerank:
+  enabled: true
+  model: "BAAI/bge-reranker-v2-m3"
+  top_n: 5
+
+# 检索配置
+retrieval:
+  graph_related_depth: 2
+  min_similarity: 0.7
+  filter_similarity_threshold: 0.8
+  page_size: 10
+  max_page_size: 100
+
+# 存储配置
+storage:
+  neo4j:
+    uri: "bolt://localhost:7687"
+    user: "neo4j"
+    password: "12345678"
+    pool_size: 50
+  
+  faiss:
+    dimension: 1024
+    index_type: "flat"
+    rebuild_index: false
+    max_index_size: 1000000
+
+# 应用配置
+app:
+  name: "Neko API"
+  version: "1.0.0"
+  description: "持久记忆AI助手API"
+  debug: false
+  host: "0.0.0.0"
+  port: 8000
+
+# 文件路径配置
+paths:
+  base_md: "base.md"
+  prompt_md: "prompt.md"
+  logs_dir: "logs"
+  backups_dir: "backups"
+  faiss_index_path: "data/faiss_index.pkl"
+
+# 日志配置
+logging:
+  level: "INFO"
+  console: true
+  file: true
+  max_size: 10
+  backup_count: 5
+  log_requests: true
+
+# 用户信息
+user:
+  username: "admin"
+  password_hash: "8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918"  # admin的SHA-256哈希
+  email: "admin@example.com"
+  role: "admin"
+  enabled: true
+  created_at: "2023-01-01 00:00:00" 

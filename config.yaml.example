@@ -1,0 +1,143 @@
+# Persistent-memory-Neko 配置文件示例
+# 可以复制此文件为 config.yaml 进行实际配置
+
+# API 配置
+api:
+  # API密钥，用于验证API请求
+  key: "sk-jivwbgqsesocbzkggntyzjwlkvlyhuiaphesburlvyswzsfc"
+  # API基础URL，不同AI服务提供商可能有不同的URL
+  base_url: "https://api.siliconflow.cn/v1"
+  # API请求超时时间（秒）
+  timeout: 30
+  # 是否开启API密钥校验
+  auth_enabled: true
+  # API请求速率限制（每分钟请求次数）
+  rate_limit: 60
+
+# 模型配置
+model:
+  # 使用的大语言模型名称
+  name: "Pro/deepseek-ai/DeepSeek-V3"
+  # 温度参数，控制随机性（0-1），越高越随机
+  temperature: 0.7
+  # 最大生成token数
+  max_tokens: 4096
+  # Top-p参数，控制生成的多样性
+  top_p: 0.9
+  # 频率惩罚参数
+  frequency_penalty: 0
+  # 存在惩罚参数
+  presence_penalty: 0
+
+# 嵌入模型配置
+embedding:
+  # 使用的嵌入模型
+  model: "BAAI/bge-large-zh-v1.5"
+  # 超时时间（秒）
+  timeout: 30
+  # 向量维度
+  dimension: 1024
+
+# 重排序配置
+rerank:
+  # 是否启用重排序
+  enabled: true
+  # 重排序模型
+  model: "BAAI/bge-reranker-v2-m3"
+  # 重排序返回的结果数量
+  top_n: 5
+
+# 检索配置
+retrieval:
+  # 图关联深度，影响搜索相关记忆的范围
+  graph_related_depth: 2
+  # 最小相似度阈值，低于此值的记忆不会被返回
+  min_similarity: 0.7
+  # 过滤相似度阈值，用于过滤重复记忆
+  filter_similarity_threshold: 0.8
+  # 分页查询时每页的默认数量
+  page_size: 10
+  # 最大页面大小限制
+  max_page_size: 100
+
+# 存储配置
+storage:
+  # Neo4j配置
+  neo4j:
+    # Neo4j数据库URI
+    uri: "bolt://localhost:7687"
+    # Neo4j用户名
+    user: "neo4j"
+    # Neo4j密码
+    password: "12345678"
+    # 连接池大小
+    pool_size: 50
+  
+  # FAISS配置
+  faiss:
+    # 向量维度
+    dimension: 1024
+    # 索引类型 (flat, ivf, hnsw等)
+    index_type: "flat"
+    # 是否定期重建索引
+    rebuild_index: false
+    # 最大索引大小（记录数，超过会触发重建）
+    max_index_size: 1000000
+
+# 应用配置
+app:
+  # 应用名称
+  name: "Neko API"
+  # 应用版本
+  version: "1.0.0"
+  # 应用描述
+  description: "持久记忆AI助手API"
+  # 是否开启调试模式
+  debug: false
+  # 服务器主机地址
+  host: "0.0.0.0"
+  # 服务器端口
+  port: 8000
+
+# 文件路径配置
+paths:
+  # 基础提示词文件路径
+  base_md: "base.md"
+  # 人设提示词文件路径
+  prompt_md: "prompt.md"
+  # 日志目录
+  logs_dir: "logs"
+  # 备份目录
+  backups_dir: "backups"
+  # FAISS索引文件路径
+  faiss_index_path: "data/faiss_index.pkl"
+
+# 日志配置
+logging:
+  # 日志级别 (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+  level: "INFO"
+  # 是否输出到控制台
+  console: true
+  # 是否输出到文件
+  file: true
+  # 日志文件大小上限（MB）
+  max_size: 10
+  # 保留的日志文件数量
+  backup_count: 5
+  # 是否记录API请求
+  log_requests: true
+
+# 用户信息
+user:
+  # 用户名
+  username: "admin"
+  # 密码哈希
+  password_hash: "8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918"  # admin的SHA-256哈希
+  # 用户邮箱
+  email: "admin@example.com"
+  # 用户角色 (admin, user)
+  role: "admin"
+  # 是否启用
+  enabled: true
+  # 创建时间
+  created_at: "2023-01-01 00:00:00" 
