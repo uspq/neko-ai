@@ -64,6 +64,13 @@ class Settings(BaseSettings):
     BACKUPS_DIR: str = Field("backups", env="BACKUPS_DIR")
     FAISS_INDEX_PATH: str = Field("data/faiss_index.pkl", env="FAISS_INDEX_PATH")
     
+    # 知识库配置
+    KNOWLEDGE_DIR: str = Field("knowledge/data", env="KNOWLEDGE_DIR")
+    KNOWLEDGE_INDEX_PATH: str = Field("knowledge/index/knowledge_index.pkl", env="KNOWLEDGE_INDEX_PATH")
+    KNOWLEDGE_CHUNK_SIZE: int = Field(1000, env="KNOWLEDGE_CHUNK_SIZE")
+    KNOWLEDGE_CHUNK_OVERLAP: int = Field(200, env="KNOWLEDGE_CHUNK_OVERLAP")
+    KNOWLEDGE_MAX_FILE_SIZE: int = Field(10 * 1024 * 1024, env="KNOWLEDGE_MAX_FILE_SIZE")  # 10MB
+    
     # 日志配置
     LOG_LEVEL: str = Field("INFO", env="LOG_LEVEL")
     LOG_CONSOLE: bool = Field(True, env="LOG_CONSOLE")
@@ -176,6 +183,15 @@ class Settings(BaseSettings):
             if "max_page_size" in retrieval_config:
                 self.RETRIEVAL_MAX_PAGE_SIZE = retrieval_config["max_page_size"]
         
+        if "knowledge" in config:
+            knowledge_config = config["knowledge"]
+            if "chunk_size" in knowledge_config:
+                self.KNOWLEDGE_CHUNK_SIZE = knowledge_config["chunk_size"]
+            if "chunk_overlap" in knowledge_config:
+                self.KNOWLEDGE_CHUNK_OVERLAP = knowledge_config["chunk_overlap"]
+            if "max_file_size" in knowledge_config:
+                self.KNOWLEDGE_MAX_FILE_SIZE = knowledge_config["max_file_size"]
+        
         if "storage" in config:
             storage_config = config["storage"]
             if "neo4j" in storage_config:
@@ -227,6 +243,10 @@ class Settings(BaseSettings):
                 self.BACKUPS_DIR = paths_config["backups_dir"]
             if "faiss_index_path" in paths_config:
                 self.FAISS_INDEX_PATH = paths_config["faiss_index_path"]
+            if "knowledge_dir" in paths_config:
+                self.KNOWLEDGE_DIR = paths_config["knowledge_dir"]
+            if "knowledge_index_path" in paths_config:
+                self.KNOWLEDGE_INDEX_PATH = paths_config["knowledge_index_path"]
         
         if "logging" in config:
             logging_config = config["logging"]

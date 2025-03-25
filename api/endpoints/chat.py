@@ -15,6 +15,9 @@ async def chat(request: ChatRequest):
     
     - **message**: 用户消息
     - **use_memory**: 是否使用记忆功能
+    - **use_knowledge**: 是否使用知识库
+    - **knowledge_query**: 知识库搜索查询，如果为None则使用message
+    - **knowledge_limit**: 知识库搜索结果数量限制
     - **temperature**: 温度参数，控制随机性
     - **max_tokens**: 最大生成token数
     
@@ -26,6 +29,9 @@ async def chat(request: ChatRequest):
         response = chat_service.get_chat_response(
             message=request.message,
             use_memory=request.use_memory,
+            use_knowledge=request.use_knowledge,
+            knowledge_query=request.knowledge_query,
+            knowledge_limit=request.knowledge_limit,
             temperature=request.temperature,
             max_tokens=request.max_tokens
         )

@@ -51,6 +51,7 @@ cd Persistent-memory-Neko
 python -m venv .venv
 source .venv/bin/activate  # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
+/Users/hllqk/neko-ai-app/.venv/bin/python /Users/hllqk/neko-ai-app/main.py
 ```
 
 3. 配置Neo4j数据库

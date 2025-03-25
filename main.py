@@ -29,8 +29,10 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # 允许所有来源，生产环境应该限制
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization", "X-API-Key", "Accept", "Origin"],
+    expose_headers=["X-Process-Time"],
+    max_age=600,  # 预检请求结果缓存10分钟
 )
 
 # 添加请求处理中间件
@@ -84,6 +86,8 @@ def start():
     os.makedirs(settings.LOGS_DIR, exist_ok=True)
     os.makedirs(settings.BACKUPS_DIR, exist_ok=True)
     os.makedirs(os.path.dirname(settings.FAISS_INDEX_PATH), exist_ok=True)
+    os.makedirs(settings.KNOWLEDGE_DIR, exist_ok=True)
+    os.makedirs(os.path.dirname(settings.KNOWLEDGE_INDEX_PATH), exist_ok=True)
     
     # 启动服务
     logger.info(f"启动 {settings.APP_NAME} 服务")

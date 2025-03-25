@@ -7,6 +7,7 @@ from core.config import settings
 from utils.logger import logger
 from models.chat import ChatResponse, TokenCost
 from services.memory_service import MemoryService
+from services.knowledge_service import knowledge_service
 from utils.text import calculate_tokens_and_cost
 
 class ChatService:
@@ -17,9 +18,12 @@ class ChatService:
             base_url=settings.API_BASE_URL
         )
         
-    def get_chat_response(self, 
-                          message: str, 
+    def get_chat_response(self,
+                          message: str,
                           use_memory: bool = True,
+                          use_knowledge: bool = False,
+                          knowledge_query: Optional[str] = None,
+                          knowledge_limit: int = 3,
                           temperature: Optional[float] = None,
                           max_tokens: Optional[int] = None) -> ChatResponse:
         """获取聊天响应
@@ -27,6 +31,9 @@ class ChatService:
         Args:
             message: 用户消息
             use_memory: 是否使用记忆
+            use_knowledge: 是否使用知识库
+            knowledge_query: 知识库搜索查询，如果为None则使用message
+            knowledge_limit: 知识库搜索结果数量限制
             temperature: 温度参数，控制随机性
             max_tokens: 最大生成token数
             
@@ -40,9 +47,19 @@ class ChatService:
             # 获取相关上下文
             context = ""
             memories_used = []
+            knowledge_results = []
             
             if use_memory:
                 context, memories_used = MemoryService.get_context(message)
+            
+            # 获取知识库搜索结果
+            if use_knowledge:
+                query = knowledge_query if knowledge_query else message
+                knowledge_results = knowledge_service.search_knowledge(
+                    query=query,
+                    limit=knowledge_limit
+                )
+                logger.info(f"知识库搜索结果: {len(knowledge_results)} 条")
             
             # 构建带有上下文的提示
             current_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -51,11 +68,19 @@ class ChatService:
             base_md = self._read_file_content(settings.BASE_MD_PATH, "")
             prompt_md = self._read_file_content(settings.PROMPT_MD_PATH, "prompt.md文件不存在，无法获取内容。")
             
+            # 构建知识库内容
+            knowledge_content = ""
+            if use_knowledge and knowledge_results:
+                knowledge_content = "\n3.以下是与用户问题相关的知识库内容，你可以参考这些内容来回答用户的问题：\n"
+                for i, result in enumerate(knowledge_results):
+                    knowledge_content += f"[{i+1}] 文件: {result.filename}\n内容: {result.content}\n\n"
+            
             system_message = (
                 base_md + "\n" +  # 在 prompt 的最前面添加 basemd 内容
                 "1.你需要严格遵守的人设:" + prompt_md + "\n"
                 +
                 "2.你要扮演人设，根据人设回答问题，下面你与用户的对话记录，当前时间是" + current_date + "，读取然后根据对话内容和人设，再最后回复用户User问题：\n" + context
+                + knowledge_content
             )
             
             messages = [
@@ -107,6 +132,7 @@ class ChatService:
                 output_tokens=output_tokens,
                 cost=cost,
                 memories_used=memories_used,
+                knowledge_used=knowledge_results if use_knowledge else [],
                 timestamp=timestamp
             )
             

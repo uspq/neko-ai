@@ -7,6 +7,7 @@
 - **基础URL**: `http://your-domain.com/api`
 - **认证方式**: API密钥认证（在请求头中添加`X-API-Key`字段）
 - **响应格式**: 所有API响应均为JSON格式
+- **CORS支持**: 所有API端点均支持跨域请求
 
 ## 聊天API
 
@@ -24,6 +25,9 @@ POST /chat/chat
 {
   "message": "你好，今天天气怎么样？",
   "use_memory": true,
+  "use_knowledge": false,
+  "knowledge_query": null,
+  "knowledge_limit": 3,
   "temperature": 0.7,
   "max_tokens": 1000
 }
@@ -33,6 +37,9 @@ POST /chat/chat
 |-----|-----|------|-----|
 | message | string | 是 | 用户消息内容 |
 | use_memory | boolean | 否 | 是否使用记忆功能，默认为true |
+| use_knowledge | boolean | 否 | 是否使用知识库，默认为false |
+| knowledge_query | string | 否 | 知识库搜索查询，如果为null则使用message |
+| knowledge_limit | integer | 否 | 知识库搜索结果数量限制，默认为3 |
 | temperature | float | 否 | 温度参数，控制随机性，默认为0.7 |
 | max_tokens | integer | 否 | 最大生成token数，默认为1000 |
 
@@ -40,19 +47,26 @@ POST /chat/chat
 
 ```json
 {
-  "response": "今天天气晴朗，温度适宜。有什么我可以帮您的吗？",
+  "message": "今天天气晴朗，温度适宜。有什么我可以帮您的吗？",
   "input_tokens": 12,
   "output_tokens": 18,
-  "total_cost": 0.00036,
-  "thinking": "用户询问今天的天气情况，我会提供一个友好的回复...",
-  "memory_id": "mem_12345678",
-  "related_memories": [
+  "cost": 0.00036,
+  "memories_used": [
     {
       "id": "mem_87654321",
       "content": "用户之前提到他喜欢晴朗的天气",
       "relevance": 0.92
     }
-  ]
+  ],
+  "knowledge_used": [
+    {
+      "file_id": "file_12345678",
+      "filename": "weather_data.txt",
+      "content": "今天北京天气晴朗，气温22-28度，适宜户外活动。",
+      "relevance": 0.95
+    }
+  ],
+  "timestamp": "2023-05-25T10:15:30.123456"
 }
 ```
 
@@ -231,6 +245,206 @@ GET /memory/{memory_id}
       "relevance": 0.85
     }
   ]
+}
+```
+
+## 知识库API
+
+### 上传文件到知识库
+
+```
+POST /knowledge/upload
+```
+
+上传文件到知识库，支持多种文件格式。
+
+**请求参数**:
+
+- **file**: 文件（multipart/form-data）
+- **description**: 文件描述（可选）
+
+**支持的文件类型**:
+- 文本文件 (.txt)
+- PDF文件 (.pdf)
+- Word文档 (.docx, .doc)
+- Excel表格 (.xlsx, .xls)
+- Markdown文件 (.md)
+- CSV文件 (.csv)
+- JSON文件 (.json)
+
+**响应示例**:
+
+```json
+{
+  "file_id": "file_12345678",
+  "filename": "important_data.pdf",
+  "size": 1024567,
+  "description": "重要数据文档",
+  "upload_time": "2023-05-25T10:15:30Z",
+  "chunks_count": 15,
+  "status": "processed"
+}
+```
+
+### 获取知识库文件列表
+
+```
+GET /knowledge/files
+```
+
+获取知识库中的所有文件。
+
+**查询参数**:
+
+| 参数 | 类型 | 必填 | 描述 |
+|-----|-----|------|-----|
+| page | integer | 否 | 页码，默认为1 |
+| page_size | integer | 否 | 每页记录数，默认为20 |
+| sort_by | string | 否 | 排序字段，可选值：upload_time, filename，默认为upload_time |
+| order | string | 否 | 排序方向，可选值：asc, desc，默认为desc |
+
+**响应示例**:
+
+```json
+{
+  "items": [
+    {
+      "file_id": "file_12345678",
+      "filename": "important_data.pdf",
+      "size": 1024567,
+      "description": "重要数据文档",
+      "upload_time": "2023-05-25T10:15:30Z",
+      "chunks_count": 15,
+      "status": "processed"
+    },
+    {
+      "file_id": "file_87654321",
+      "filename": "user_manual.docx",
+      "size": 512345,
+      "description": "用户手册",
+      "upload_time": "2023-05-24T14:30:15Z",
+      "chunks_count": 8,
+      "status": "processed"
+    }
+  ],
+  "total": 25,
+  "page": 1,
+  "page_size": 20,
+  "total_pages": 2
+}
+```
+
+### 获取知识库文件详情
+
+```
+GET /knowledge/files/{file_id}
+```
+
+获取知识库中特定文件的详细信息。
+
+**路径参数**:
+
+| 参数 | 类型 | 描述 |
+|-----|-----|------|
+| file_id | string | 文件ID |
+
+**响应示例**:
+
+```json
+{
+  "file_id": "file_12345678",
+  "filename": "important_data.pdf",
+  "size": 1024567,
+  "description": "重要数据文档",
+  "upload_time": "2023-05-25T10:15:30Z",
+  "chunks_count": 15,
+  "status": "processed",
+  "content_preview": "这是文件内容的预览...",
+  "chunks": [
+    {
+      "chunk_id": "chunk_12345678_1",
+      "content": "第一个文本块的内容...",
+      "tokens": 150
+    },
+    {
+      "chunk_id": "chunk_12345678_2",
+      "content": "第二个文本块的内容...",
+      "tokens": 120
+    }
+  ]
+}
+```
+
+### 删除知识库文件
+
+```
+DELETE /knowledge/files/{file_id}
+```
+
+从知识库中删除特定文件。
+
+**路径参数**:
+
+| 参数 | 类型 | 描述 |
+|-----|-----|------|
+| file_id | string | 文件ID |
+
+**响应示例**:
+
+```json
+{
+  "success": true,
+  "message": "文件已成功删除",
+  "file_id": "file_12345678"
+}
+```
+
+### 搜索知识库
+
+```
+POST /knowledge/search
+```
+
+在知识库中搜索相关内容。
+
+**请求参数**:
+
+```json
+{
+  "query": "如何使用产品X的高级功能？",
+  "limit": 5,
+  "min_relevance": 0.7
+}
+```
+
+| 参数 | 类型 | 必填 | 描述 |
+|-----|-----|------|-----|
+| query | string | 是 | 搜索查询内容 |
+| limit | integer | 否 | 返回结果数量限制，默认为5 |
+| min_relevance | float | 否 | 最小相关性阈值，默认为0.6 |
+
+**响应示例**:
+
+```json
+{
+  "results": [
+    {
+      "file_id": "file_12345678",
+      "filename": "product_manual.pdf",
+      "chunk_id": "chunk_12345678_5",
+      "content": "产品X的高级功能包括自动化工作流、数据分析和报表生成...",
+      "relevance": 0.92
+    },
+    {
+      "file_id": "file_87654321",
+      "filename": "advanced_features.docx",
+      "chunk_id": "chunk_87654321_2",
+      "content": "要使用高级功能，请先进入设置页面，然后选择'高级选项'...",
+      "relevance": 0.85
+    }
+  ],
+  "total_found": 8,
+  "query_embedding_dim": 1536
 }
 ```
 
