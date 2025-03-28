@@ -95,7 +95,7 @@ storage:
     # MySQL用户名
     user: "root"
     # MySQL密码
-    password: "root"
+    password: "12345678"
     # MySQL数据库名
     database: "neko_ai"
     # 连接池大小
