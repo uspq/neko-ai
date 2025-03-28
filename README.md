@@ -7,6 +7,9 @@
 - 🧠 **持久记忆**：使用Neo4j图数据库和FAISS向量数据库存储对话历史
 - 🔍 **语义搜索**：使用向量相似度查找相关记忆
 - 📊 **图关系分析**：基于图数据库的关系分析，提供更好的上下文理解
+- 🌐 **网页搜索功能**：支持使用DuckDuckGo、博查等搜索引擎执行实时网络搜索，辅助回答问题
+- 📚 **知识库管理**：支持上传和管理自定义知识文档
+- 💬 **多对话管理**：支持创建和管理多个独立对话，每个对话有自己的上下文环境
 - 🚀 **高性能API**：基于FastAPI的高性能API服务
 - 🔒 **安全认证**：API密钥验证机制保障服务安全
 - 📝 **灵活配置**：通过YAML/JSON配置文件灵活配置服务参数
@@ -39,6 +42,9 @@
 - 足够的存储空间用于向量数据库
 
 ## 快速开始
+mac测试运行脚本:
+可以运行这个开发环境
+/opt/anaconda3/bin/python /Users/hllqk/giyhub/neko-ai/run.py
 
 1. 克隆仓库
 ```bash
@@ -125,6 +131,15 @@ memory:
   ttl_days: 30  # 记忆保留天数
 ```
 
+### 网页搜索设置
+```yaml
+web_search:
+  default_search_engine: "langchain"
+  type: "duckduckgo"  # 可选: duckduckgo, baichuan
+  limit: 3  # 默认搜索结果数量限制
+  enable_by_default: false  # 默认是否开启网页搜索功能
+```
+
 详细配置项请参考`config.yaml.example`中的注释说明。
 
 ## 项目结构
@@ -166,7 +181,9 @@ memory:
 
 ## API文档
 
-详细的API文档请参考 [API_DOCUMENTATION.md](API_DOCUMENTATION.md)。
+详细的API文档请参考：
+- [API_DOCUMENTATION.md](API_DOCUMENTATION.md) - 所有API端点的详细说明
+- [WEB_SEARCH_DOCUMENTATION.md](WEB_SEARCH_DOCUMENTATION.md) - 网页搜索功能的专门文档
 
 您也可以通过访问服务的Swagger UI文档页面（`/docs`）或ReDoc页面（`/redoc`）获取交互式API文档。
 
@@ -240,6 +257,12 @@ A: 使用系统API的备份功能 `POST /api/system/backup`，或直接复制 Ne
 
 ### Q: 能否使用其他向量数据库代替 FAISS？
 A: 可以，你可以实现自己的向量存储适配器在 `db/` 目录中。
+
+### Q: 如何启用网页搜索功能？
+A: 首先在配置文件`config.yaml`中设置网页搜索相关配置，然后在API请求中添加`"use_web_search": true`参数。详细说明请参考[WEB_SEARCH_DOCUMENTATION.md](WEB_SEARCH_DOCUMENTATION.md)。
+
+### Q: 为什么设置了`use_web_search`为true但没有执行网页搜索？
+A: 请检查配置文件中的搜索引擎设置是否正确，并确保在请求中明确设置了`"use_web_search": true`。此外，确保您的问题适合通过网页搜索获取答案。
 
 ## 许可证
 

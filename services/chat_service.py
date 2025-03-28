@@ -32,7 +32,8 @@ class ChatService:
                               web_search_limit: int = 3,
                               conversation_id: Optional[str] = None,
                               temperature: Optional[float] = None,
-                              max_tokens: Optional[int] = None) -> ChatResponse:
+                              max_tokens: Optional[int] = None,
+                              conversation_files: Optional[List[str]] = None) -> ChatResponse:
         """获取聊天响应
         
         Args:
@@ -47,6 +48,7 @@ class ChatService:
             conversation_id: 对话ID，用于关联记忆和历史消息
             temperature: 温度参数，控制随机性
             max_tokens: 最大生成token数，默认使用设置中的MODEL_MAX_TOKENS
+            conversation_files: 对话关联的文件ID列表
             
         Returns:
             ChatResponse: 聊天响应对象
@@ -322,13 +324,14 @@ class ChatService:
             logger.error(f"读取{file_path}文件失败: {str(e)}")
             return default_content
     
-    async def process_message(self, user_message: str, conversation_id: Optional[str] = None, web_search: bool = False) -> ChatResponse:
+    async def process_message(self, user_message: str, conversation_id: Optional[str] = None, web_search: bool = False, conversation_files: Optional[List[str]] = None) -> ChatResponse:
         """处理用户消息，生成回复"""
         try:
             return await self.get_chat_response(
                 message=user_message,
                 conversation_id=conversation_id,
-                use_web_search=web_search
+                use_web_search=web_search,
+                conversation_files=conversation_files
             )
         except Exception as e:
             logger.error(f"处理消息时出错: {str(e)}", exc_info=True)

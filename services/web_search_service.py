@@ -4,6 +4,8 @@ import json
 import requests
 from langchain_community.utilities import GoogleSearchAPIWrapper, SerpAPIWrapper
 from langchain_core.documents import Document
+from langchain_community.tools import DuckDuckGoSearchRun
+from langchain_community.tools.tavily_search import TavilySearchResults
 from core.config import config
 from utils.logger import logger
 
@@ -148,6 +150,91 @@ class BochaSearchEngine(SearchEngine):
         except Exception as e:
             logger.error(f"记录响应失败: {str(e)}")
 
+class LangChainSearchEngine(SearchEngine):
+    """使用LangChain的搜索引擎"""
+    def __init__(self, search_type: str = "duckduckgo", api_key: str = None):
+        """初始化LangChain搜索引擎
+        
+        Args:
+            search_type: 搜索类型，可选值为：duckduckgo, tavily
+            api_key: 如果需要API密钥的搜索服务则提供
+        """
+        self.search_type = search_type
+        self.api_key = api_key
+        self.engine = None
+        
+        if search_type == "duckduckgo":
+            self.engine = DuckDuckGoSearchRun()
+            logger.info("初始化DuckDuckGo搜索引擎")
+        elif search_type == "tavily" and api_key:
+            os.environ["TAVILY_API_KEY"] = api_key
+            self.engine = TavilySearchResults(max_results=10)
+            logger.info("初始化Tavily搜索引擎")
+        else:
+            logger.warning(f"不支持的LangChain搜索类型: {search_type}")
+    
+    def search(self, query: str, num_results: int = 5) -> List[Dict[str, Any]]:
+        """使用LangChain执行搜索"""
+        try:
+            if not self.engine:
+                logger.error("搜索引擎未初始化")
+                return []
+                
+            logger.info(f"使用LangChain {self.search_type}搜索: {query}")
+            
+            if self.search_type == "duckduckgo":
+                # DuckDuckGo返回的是字符串
+                result_str = self.engine.run(query)
+                # 解析结果
+                results = []
+                # 尝试将结果拆分为多个条目
+                items = result_str.split("\n\n")
+                for i, item in enumerate(items[:num_results]):
+                    # 从文本中提取标题和链接（如果有的话）
+                    lines = item.split("\n")
+                    title = lines[0] if lines else ""
+                    link = ""
+                    # 查找可能的URL
+                    for line in lines:
+                        if line.startswith("http"):
+                            link = line
+                            break
+                    
+                    results.append({
+                        "title": title,
+                        "link": link,
+                        "snippet": item
+                    })
+                return results
+                
+            elif self.search_type == "tavily":
+                # Tavily返回结构化数据
+                raw_results = self.engine.invoke({"query": query})
+                results = []
+                
+                for item in raw_results[:num_results]:
+                    results.append({
+                        "title": item.get("title", ""),
+                        "link": item.get("url", ""),
+                        "snippet": item.get("content", "")
+                    })
+                
+                return results
+                
+            return []
+            
+        except Exception as e:
+            logger.error(f"LangChain搜索失败: {str(e)}", exc_info=True)
+            return []
+    
+    def is_available(self) -> bool:
+        """检查搜索引擎是否可用"""
+        if self.search_type == "duckduckgo":
+            return self.engine is not None
+        elif self.search_type == "tavily":
+            return self.engine is not None and self.api_key is not None
+        return False
+
 class WebSearchService:
     """网络搜索服务，提供多种搜索引擎支持"""
     
@@ -156,6 +243,9 @@ class WebSearchService:
         # 加载配置
         self.web_search_config = config.get("web_search", {})
         self.serpapi_config = config.get("serpapi", {})
+        
+        # 搜索服务启用状态
+        self.enabled = self.web_search_config.get("enabled", False)
         
         # 默认搜索引擎
         self.default_engine = self.web_search_config.get("default_engine", "bocha")
@@ -171,6 +261,23 @@ class WebSearchService:
     def _init_search_engines(self):
         """初始化所有配置的搜索引擎"""
         logger.info("开始初始化搜索引擎")
+        
+        # 初始化LangChain搜索引擎
+        langchain_config = self.web_search_config.get("langchain", {})
+        langchain_enabled = langchain_config.get("enabled", True)  # 默认启用
+        langchain_type = langchain_config.get("type", "duckduckgo")  # 默认使用DuckDuckGo
+        langchain_api_key = langchain_config.get("api_key", "")
+        
+        logger.info(f"LangChain搜索配置: 类型={langchain_type}, 启用={langchain_enabled}")
+        
+        if langchain_enabled:
+            self.engines["langchain"] = LangChainSearchEngine(
+                search_type=langchain_type,
+                api_key=langchain_api_key
+            )
+            # 设置LangChain为默认引擎
+            self.default_engine = "langchain"
+            logger.info(f"LangChain {langchain_type} 搜索引擎已初始化")
         
         # 初始化博查搜索
         bocha_config = self.web_search_config.get("bocha", {})
@@ -289,20 +396,27 @@ class WebSearchService:
         return documents
     
     def is_available(self, engine_name: Optional[str] = None) -> bool:
-        """检查搜索服务是否可用
+        """检查搜索服务或特定引擎是否可用
         
         Args:
-            engine_name: 搜索引擎名称，不指定则检查任何可用引擎
+            engine_name: 搜索引擎名称，不指定则检查任意可用引擎
             
         Returns:
-            bool: 搜索服务是否可用
+            bool: 是否可用
         """
+        # 首先检查服务是否全局启用
+        if not self.enabled:
+            return False
+            
         if engine_name:
-            engine = self.engines.get(engine_name)
+            engine = self.get_engine(engine_name)
             return engine is not None and engine.is_available()
         else:
-            # 检查是否有任何可用的引擎
-            return any(engine.is_available() for engine in self.engines.values())
+            # 检查任意可用引擎
+            for engine in self.engines.values():
+                if engine.is_available():
+                    return True
+            return False
 
 # 创建全局搜索服务实例
 web_search_service = WebSearchService() 

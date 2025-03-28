@@ -181,10 +181,18 @@ serpapi:
 web_search:
   # 是否启用网络搜索
   enabled: true
-  # 默认搜索引擎 (bocha, google, serpapi)
-  default_engine: "bocha"
+  # 默认搜索引擎 (langchain, bocha, google, serpapi)
+  default_engine: "langchain"
   # 搜索结果数量
   num_results: 5
+  # LangChain搜索配置
+  langchain:
+    # 是否启用LangChain搜索
+    enabled: true
+    # 搜索类型: duckduckgo, tavily
+    type: "duckduckgo"
+    # Tavily搜索API密钥（仅在type为tavily时需要）
+    api_key: ""
   # 博查搜索配置
   bocha:
     api_key: "sk-979dcdf9bc144b289d3370bdee35a6a0"

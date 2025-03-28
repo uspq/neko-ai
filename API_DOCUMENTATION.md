@@ -28,6 +28,9 @@ POST /chat/chat
   "use_knowledge": false,
   "knowledge_query": null,
   "knowledge_limit": 3,
+  "use_web_search": true,
+  "web_search_query": null,
+  "web_search_limit": 3,
   "temperature": 0.7,
   "max_tokens": 1000
 }
@@ -40,6 +43,9 @@ POST /chat/chat
 | use_knowledge | boolean | 否 | 是否使用知识库，默认为false |
 | knowledge_query | string | 否 | 知识库搜索查询，如果为null则使用message |
 | knowledge_limit | integer | 否 | 知识库搜索结果数量限制，默认为3 |
+| use_web_search | boolean | 否 | 是否启用网络搜索功能，默认为false |
+| web_search_query | string | 否 | 网络搜索查询，如果为null则使用message |
+| web_search_limit | integer | 否 | 网络搜索结果数量限制，默认为3 |
 | temperature | float | 否 | 温度参数，控制随机性，默认为0.7 |
 | max_tokens | integer | 否 | 最大生成token数，默认为1000 |
 
@@ -64,6 +70,13 @@ POST /chat/chat
       "filename": "weather_data.txt",
       "content": "今天北京天气晴朗，气温22-28度，适宜户外活动。",
       "relevance": 0.95
+    }
+  ],
+  "web_search_used": [
+    {
+      "title": "北京今日天气预报",
+      "link": "https://example.com/weather/beijing",
+      "snippet": "北京今日天气晴朗，气温22-28度，空气质量良好，适宜户外活动。"
     }
   ],
   "timestamp": "2023-05-25T10:15:30.123456"
@@ -951,6 +964,9 @@ POST /conversation_chat
   "use_knowledge": false,
   "knowledge_query": null,
   "knowledge_limit": 3,
+  "use_web_search": true,
+  "web_search_query": null,
+  "web_search_limit": 3,
   "temperature": 0.7,
   "max_tokens": 4000
 }
@@ -964,6 +980,9 @@ POST /conversation_chat
 | use_knowledge | boolean | 否 | 是否使用知识库 |
 | knowledge_query | string | 否 | 知识库搜索查询，如果为null则使用message |
 | knowledge_limit | integer | 否 | 知识库搜索结果数量限制 |
+| use_web_search | boolean | 否 | 是否启用网络搜索功能，默认为false |
+| web_search_query | string | 否 | 网络搜索查询，如果为null则使用message |
+| web_search_limit | integer | 否 | 网络搜索结果数量限制，默认为3 |
 | temperature | number | 否 | 温度参数，控制随机性 |
 | max_tokens | integer | 否 | 最大生成token数 |
 
@@ -977,7 +996,70 @@ POST /conversation_chat
   "cost": 0.00034,
   "memories_used": [],
   "knowledge_used": [],
+  "web_search_used": [
+    {
+      "title": "最新AI技术进展",
+      "link": "https://example.com/ai-news",
+      "snippet": "本文介绍了2024年AI领域的最新技术进展..."
+    }
+  ],
   "timestamp": "2023-04-28T12:00:00.000000",
   "conversation_id": "550e8400-e29b-41d4-a716-446655440000"
+}
+```
+
+## 网络搜索API
+
+### 执行网络搜索
+
+```
+GET /web-search/search
+```
+
+执行网络搜索并返回结果。
+
+**查询参数**:
+
+| 参数 | 类型 | 必填 | 描述 |
+|-----|-----|------|-----|
+| query | string | 是 | 搜索查询内容 |
+| engine | string | 否 | 搜索引擎名称（如bocha、langchain等），不指定则使用默认引擎 |
+| num_results | integer | 否 | 返回结果数量，默认为配置中的值 |
+
+**响应示例**:
+
+```json
+{
+  "results": [
+    {
+      "title": "2024年AI发展最新进展",
+      "link": "https://example.com/ai-progress",
+      "snippet": "人工智能在2024年取得了重大突破..."
+    }
+  ],
+  "engine": "bocha",
+  "query": "最新AI进展"
+}
+```
+
+### 获取可用搜索引擎
+
+```
+GET /web-search/engines
+```
+
+获取当前可用的搜索引擎列表。
+
+**响应示例**:
+
+```json
+{
+  "available_engines": {
+    "bocha": true,
+    "langchain": true,
+    "google": false,
+    "serpapi": false
+  },
+  "default_engine": "langchain"
 }
 ``` 

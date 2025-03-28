@@ -83,6 +83,36 @@ class ConversationChatRequest(BaseModel):
     temperature: Optional[float] = None
     max_tokens: Optional[int] = None
 
+    class Config:
+        schema_extra = {
+            "example": {
+                "conversation_id": 1,
+                "message": "请告诉我最新的AI进展",
+                "use_memory": True,
+                "use_knowledge": False,
+                "knowledge_query": None,
+                "knowledge_limit": 3,
+                "use_web_search": True,
+                "web_search_query": None,
+                "web_search_limit": 3,
+                "temperature": 0.7,
+                "max_tokens": 4096
+            },
+            "description": {
+                "conversation_id": "对话ID",
+                "message": "用户消息",
+                "use_memory": "是否使用记忆功能，默认使用对话设置中的值",
+                "use_knowledge": "是否使用知识库，默认使用对话设置中的值",
+                "knowledge_query": "知识库搜索查询，为None则使用message",
+                "knowledge_limit": "知识库搜索结果数量限制",
+                "use_web_search": "是否启用网络搜索功能，默认使用对话设置中的值，启用后AI将使用实时网络搜索结果辅助回答问题",
+                "web_search_query": "网络搜索查询，为None则使用message",
+                "web_search_limit": "网络搜索结果数量限制，默认为3",
+                "temperature": "温度参数，控制随机性，范围0-1.0",
+                "max_tokens": "最大生成token数"
+            }
+        }
+
 class ConversationMessage(BaseModel):
     """对话消息模型"""
     id: int
