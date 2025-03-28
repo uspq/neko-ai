@@ -20,6 +20,15 @@ async def upload_file(file: UploadFile = File(...)):
         file_info = await knowledge_service.upload_file(file)
         
         api_logger.info(f"文件上传成功: {file_info.filename}, ID: {file_info.file_id}")
+        
+        # 构建详细的使用说明
+        usage_message = (
+            "文件上传成功！您可以在聊天时通过以下方式使用该文件："
+            f"\n1. 使用文件ID: 在聊天请求中设置 knowledge_query='{file_info.file_id}'"
+            f"\n2. 使用文件名: 在聊天请求中设置 knowledge_query='{file_info.filename}'"
+            "\n3. 设置 use_knowledge=true 启用知识库查询"
+        )
+        
         return FileUploadResponse(
             file_id=file_info.file_id,
             filename=file_info.filename,
@@ -27,7 +36,7 @@ async def upload_file(file: UploadFile = File(...)):
             file_size=file_info.file_size,
             upload_time=file_info.upload_time,
             status="success",
-            message="文件上传成功"
+            message=usage_message
         )
         
     except HTTPException:
@@ -54,7 +63,7 @@ async def get_file_list(
         
         api_logger.info(f"获取知识库文件列表成功: 第{page}页，每页{page_size}条")
         return FileListResponse(
-            files=result["files"],
+            files=result["items"],
             total=result["total"],
             page=result["page"],
             page_size=result["page_size"],

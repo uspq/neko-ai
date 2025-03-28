@@ -1,7 +1,21 @@
-2025-03-25 12:36:10 - INFO - 加载FAISS索引文件: data/faiss_index.pkl
-2025-03-25 12:36:10 - INFO - FAISS索引加载成功，包含 2 条记忆
-2025-03-25 12:36:11 - INFO - Neo4j数据库初始化完成
-2025-03-25 12:36:11 - INFO - 已加载知识库文件索引，共 3 个文件
-2025-03-25 12:36:11 - INFO - 已加载知识库文本块索引，共 0 个文本块
-2025-03-25 12:36:11 - INFO - 已加载知识库FAISS索引，包含 0 个文本块向量
-2025-03-25 12:36:11 - INFO - 启动 Neko API 服务
+2025-03-27 20:38:05 - INFO - GET / - Status: 200 - Process Time: 0.0005s
+2025-03-27 20:38:12 - INFO - GET /docs - Status: 200 - Process Time: 0.0000s
+2025-03-27 20:38:12 - INFO - GET /openapi.json - Status: 200 - Process Time: 0.0184s
+2025-03-27 20:38:49 - INFO - 获取知识库文件列表成功: 第1页，每页10条
+2025-03-27 20:38:49 - INFO - GET /api/knowledge/files - Status: 200 - Process Time: 0.0000s
+2025-03-27 20:39:26 - INFO - 获取知识库文件列表成功: 第1页，每页10条
+2025-03-27 20:39:26 - INFO - GET /api/knowledge/files - Status: 200 - Process Time: 0.0010s
+2025-03-27 20:39:29 - INFO - 获取知识库文件列表成功: 第1页，每页10条
+2025-03-27 20:39:29 - INFO - GET /api/knowledge/files - Status: 200 - Process Time: 0.0010s
+2025-03-27 20:39:46 - INFO - DELETE /api/knowledge/files/my.txt - Status: 404 - Process Time: 0.0000s
+2025-03-27 20:39:57 - INFO - GET /docs - Status: 200 - Process Time: 0.0062s
+2025-03-27 20:39:57 - INFO - GET /openapi.json - Status: 200 - Process Time: 0.0000s
+2025-03-27 20:40:04 - INFO - 获取知识库文件列表成功: 第1页，每页10条
+2025-03-27 20:40:04 - INFO - GET /api/knowledge/files - Status: 200 - Process Time: 0.0005s
+2025-03-27 20:44:03 - INFO - GET / - Status: 200 - Process Time: 0.0000s
+2025-03-27 20:44:07 - INFO - GET /docs - Status: 200 - Process Time: 0.0000s
+2025-03-27 20:44:07 - INFO - GET /openapi.json - Status: 200 - Process Time: 0.0010s
+2025-03-27 21:04:38 - INFO - 获取知识库文件列表成功: 第1页，每页10条
+2025-03-27 21:04:38 - INFO - GET /api/knowledge/files - Status: 200 - Process Time: 0.0010s
+2025-03-27 21:06:25 - INFO - 获取知识库文件列表成功: 第1页，每页10条
+2025-03-27 21:06:25 - INFO - GET /api/knowledge/files - Status: 200 - Process Time: 0.0000s

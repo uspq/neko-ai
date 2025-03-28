@@ -69,7 +69,7 @@ python run.py
 ```
 
 6. 访问API文档
-   - 在浏览器中打开 http://localhost:8000/docs
+   - 在浏览器中打开 http://localhost:9999/docs
 
 ## 配置说明
 
@@ -87,8 +87,8 @@ app:
 ### API设置
 ```yaml
 api:
-  host: "0.0.0.0"
-  port: 8000
+  host: "localhost"
+  port: 9999
   api_key: "your-api-key"
   timeout: 60
 ```

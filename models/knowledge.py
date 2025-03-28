@@ -40,7 +40,7 @@ class FileUploadResponse(BaseModel):
     file_size: int
     upload_time: str
     status: str
-    message: str
+    message: str = Field(..., description="上传结果信息，包含文件使用说明")
 
 class FileListResponse(BaseModel):
     """文件列表响应"""

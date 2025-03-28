@@ -1,21 +1,51 @@
 import os
-import shutil
-import uuid
 import json
-from typing import List, Dict, Any, Optional, Tuple, BinaryIO
+import shutil
+from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime
-import numpy as np
 import pickle
-import faiss
+import numpy as np
 from fastapi import UploadFile, HTTPException
 
+# LangChain导入
+from langchain_community.document_loaders import (
+    PyPDFLoader, 
+    TextLoader, 
+    Docx2txtLoader,
+    CSVLoader, 
+    UnstructuredExcelLoader,
+    UnstructuredMarkdownLoader,
+    JSONLoader
+)
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_core.documents import Document
+from langchain_community.vectorstores import FAISS
+from langchain_core.embeddings import Embeddings
+
+# 使用自定义嵌入模块
+from core.embedding import get_embedding, get_embeddings
 from core.config import settings
 from utils.logger import logger
 from models.knowledge import KnowledgeFile, KnowledgeChunk, KnowledgeSearchResult
-from core.embedding import get_embedding
+
+# 创建自定义Embeddings类，封装我们的嵌入函数以兼容LangChain
+class CustomEmbeddings(Embeddings):
+    """自定义嵌入类，将我们的嵌入函数封装为LangChain兼容格式"""
+    
+    def embed_documents(self, texts: List[str]) -> List[List[float]]:
+        """将多个文本转换为嵌入向量"""
+        embeddings = get_embeddings(texts)
+        # 将numpy数组转换为普通列表
+        return [embedding.tolist() for embedding in embeddings]
+    
+    def embed_query(self, text: str) -> List[float]:
+        """将查询文本转换为嵌入向量"""
+        embedding = get_embedding(text)
+        # 将numpy数组转换为普通列表
+        return embedding.tolist()
 
 class KnowledgeService:
-    """知识库服务"""
+    """知识库服务 - 使用LangChain实现"""
     
     # 支持的文件类型
     SUPPORTED_FILE_TYPES = {
@@ -28,6 +58,19 @@ class KnowledgeService:
         "text/markdown": ".md",
         "text/csv": ".csv",
         "application/json": ".json"
+    }
+    
+    # 文件类型到加载器的映射
+    FILE_LOADERS = {
+        ".txt": TextLoader,
+        ".pdf": PyPDFLoader,
+        ".docx": Docx2txtLoader,
+        ".doc": Docx2txtLoader,  # 使用相同的加载器
+        ".xlsx": UnstructuredExcelLoader,
+        ".xls": UnstructuredExcelLoader,  # 使用相同的加载器
+        ".md": UnstructuredMarkdownLoader,
+        ".csv": CSVLoader,
+        ".json": JSONLoader
     }
     
     def __init__(self):
@@ -47,10 +90,19 @@ class KnowledgeService:
         self.files_index = {}
         self.chunks_index = {}
         
-        # 初始化FAISS索引
-        self.dimension = settings.EMBEDDING_DIMENSION
-        self.index = None
-        self.chunk_ids = []
+        # 初始化嵌入模型 - 使用自定义嵌入类
+        self.embedding_model = CustomEmbeddings()
+        
+        # 初始化文本分割器
+        self.text_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=self.CHUNK_SIZE,
+            chunk_overlap=self.CHUNK_OVERLAP,
+            length_function=len,
+            separators=["\n\n", "\n", ". ", " ", ""]
+        )
+        
+        # 初始化向量存储
+        self.vectorstore = None
         
         # 加载索引
         self._load_index()
@@ -79,26 +131,44 @@ class KnowledgeService:
                 logger.error(f"加载知识库文本块索引失败: {str(e)}")
                 self.chunks_index = {}
         
-        # 加载FAISS索引
+        # 加载FAISS向量存储
         if os.path.exists(self.KNOWLEDGE_INDEX_PATH):
             try:
-                with open(self.KNOWLEDGE_INDEX_PATH, 'rb') as f:
-                    data = pickle.load(f)
-                    self.index = data['index']
-                    self.chunk_ids = data.get('chunk_ids', [])
-                logger.info(f"已加载知识库FAISS索引，包含 {len(self.chunk_ids)} 个文本块向量")
+                self.vectorstore = FAISS.load_local(
+                    folder_path=os.path.dirname(self.KNOWLEDGE_INDEX_PATH),
+                    index_name=os.path.basename(self.KNOWLEDGE_INDEX_PATH).split('.')[0],
+                    embeddings=self.embedding_model,
+                    allow_dangerous_deserialization=True
+                )
+                logger.info(f"已加载知识库向量索引")
             except Exception as e:
-                logger.error(f"加载知识库FAISS索引失败: {str(e)}")
+                logger.error(f"加载知识库向量索引失败: {str(e)}")
                 self._create_new_index()
         else:
-            logger.info("知识库FAISS索引不存在，创建新索引")
+            logger.info("知识库向量索引不存在，创建新索引")
             self._create_new_index()
     
     def _create_new_index(self):
-        """创建新的FAISS索引"""
-        self.index = faiss.IndexFlatL2(self.dimension)
-        self.chunk_ids = []
-        self._save_index()
+        """创建新的向量索引"""
+        try:
+            # 创建空的FAISS索引，使用占位文本避免空列表错误
+            placeholder_text = "初始化占位文本"
+            placeholder_embedding = self.embedding_model.embed_query(placeholder_text)
+            
+            # 创建带有占位文本的索引
+            self.vectorstore = FAISS.from_texts(
+                texts=[placeholder_text],
+                embedding=self.embedding_model,
+                metadatas=[{"file_id": "initial", "chunk_id": "initial"}]
+            )
+            
+            # 保存索引
+            self._save_index()
+            logger.info("创建了新的FAISS索引")
+        except Exception as e:
+            logger.error(f"创建FAISS索引失败: {str(e)}")
+            # 如果创建失败，设置为None，后续可以重试
+            self.vectorstore = None
     
     def _save_index(self):
         """保存知识库索引"""
@@ -114,8 +184,10 @@ class KnowledgeService:
                 json.dump(self.chunks_index, f, ensure_ascii=False, indent=2)
             
             # 保存FAISS索引
-            with open(self.KNOWLEDGE_INDEX_PATH, 'wb') as f:
-                pickle.dump({'index': self.index, 'chunk_ids': self.chunk_ids}, f)
+            if self.vectorstore:
+                index_dir = os.path.dirname(self.KNOWLEDGE_INDEX_PATH)
+                index_name = os.path.basename(self.KNOWLEDGE_INDEX_PATH).split('.')[0]
+                self.vectorstore.save_local(index_dir, index_name)
             
             logger.info(f"知识库索引已保存，文件数: {len(self.files_index)}, 文本块数: {len(self.chunks_index)}")
             return True
@@ -185,7 +257,7 @@ class KnowledgeService:
             # 异步处理文件内容
             # 注意：在实际应用中，这里应该使用后台任务处理
             # 为了简化，这里直接处理
-            self._process_file(file_id, save_path, content_type)
+            self._process_file(file_id, save_path, file_ext)
             
             return file_info
             
@@ -207,31 +279,47 @@ class KnowledgeService:
             str: 文件内容预览
         """
         try:
-            # 根据文件类型提取内容
-            if content_type == "text/plain" or content_type == "text/markdown" or content_type == "text/csv":
+            file_ext = self.SUPPORTED_FILE_TYPES[content_type]
+            
+            # 使用合适的加载器加载文件
+            try:
+                loader_cls = self.FILE_LOADERS.get(file_ext)
+                if loader_cls:
+                    # 对于需要特殊处理的加载器
+                    if file_ext in ['.xlsx', '.xls']:
+                        loader = loader_cls(file_path, mode="elements")
+                    elif file_ext == '.json':
+                        # JSON加载器需要jq_schema参数
+                        loader = loader_cls(file_path, jq_schema=".", text_content=True)
+                    else:
+                        loader = loader_cls(file_path)
+                    
+                    docs = loader.load()
+                    if docs:
+                        content = docs[0].page_content
+                        return content[:max_length] + ("..." if len(content) > max_length else "")
+            except Exception as e:
+                logger.warning(f"使用LangChain加载器提取预览失败: {str(e)}，使用备用方法")
+            
+            # 备用方法: 直接读取文件
+            if file_ext in ['.txt', '.md', '.csv']:
                 with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
                     content = f.read(max_length * 2)
                     return content[:max_length] + ("..." if len(content) > max_length else "")
             
-            elif content_type == "application/json":
+            elif file_ext == '.json':
                 with open(file_path, 'r', encoding='utf-8') as f:
                     data = json.load(f)
                     content = json.dumps(data, ensure_ascii=False)
                     return content[:max_length] + ("..." if len(content) > max_length else "")
             
-            elif content_type == "application/pdf":
-                # 这里需要使用PDF解析库，如PyPDF2或pdfplumber
-                # 为简化示例，返回占位符
+            elif file_ext == '.pdf':
                 return "[PDF文件内容预览]"
             
-            elif "word" in content_type:
-                # 这里需要使用Word解析库，如python-docx
-                # 为简化示例，返回占位符
+            elif file_ext in ['.docx', '.doc']:
                 return "[Word文件内容预览]"
             
-            elif "excel" in content_type:
-                # 这里需要使用Excel解析库，如pandas或openpyxl
-                # 为简化示例，返回占位符
+            elif file_ext in ['.xlsx', '.xls']:
                 return "[Excel文件内容预览]"
             
             else:
@@ -241,13 +329,13 @@ class KnowledgeService:
             logger.error(f"提取文件内容预览失败: {str(e)}")
             return "[提取预览失败]"
     
-    def _process_file(self, file_id: str, file_path: str, content_type: str):
-        """处理文件内容，分块并生成嵌入向量
+    def _process_file(self, file_id: str, file_path: str, file_ext: str):
+        """处理文件内容，使用LangChain加载文档、分块并生成嵌入向量
         
         Args:
             file_id: 文件ID
             file_path: 文件路径
-            content_type: 文件类型
+            file_ext: 文件扩展名
         """
         try:
             # 更新文件状态为处理中
@@ -255,48 +343,80 @@ class KnowledgeService:
                 self.files_index[file_id]["embedding_status"] = "processing"
                 self._save_index()
             
-            # 提取文件内容
-            content = self._extract_file_content(file_path, content_type)
-            
-            # 分块处理
-            chunks = self._split_text_into_chunks(content, self.CHUNK_SIZE, self.CHUNK_OVERLAP)
-            
-            # 创建文本块记录并生成嵌入向量
-            chunk_count = 0
-            for i, chunk_text in enumerate(chunks):
-                if not chunk_text.strip():
-                    continue
+            # 使用LangChain加载文档
+            loader_cls = self.FILE_LOADERS.get(file_ext)
+            if not loader_cls:
+                raise ValueError(f"不支持的文件类型: {file_ext}")
                 
+            # 对于需要特殊处理的加载器
+            if file_ext in ['.xlsx', '.xls']:
+                loader = loader_cls(file_path, mode="elements")
+            elif file_ext == '.json':
+                # JSON加载器需要jq_schema参数，使用"."可以加载整个JSON
+                loader = loader_cls(file_path, jq_schema=".", text_content=True)
+            else:
+                loader = loader_cls(file_path)
+                
+            documents = loader.load()
+            
+            # 分割文档
+            chunks = self.text_splitter.split_documents(documents)
+            
+            # 处理文档块
+            texts = []
+            metadatas = []
+            chunk_count = 0
+            
+            for i, chunk in enumerate(chunks):
+                if not chunk.page_content.strip():
+                    continue
+                    
                 # 生成块ID
                 chunk_id = f"{file_id}_{i}"
                 
-                # 创建块记录
-                chunk_info = KnowledgeChunk(
-                    chunk_id=chunk_id,
-                    file_id=file_id,
-                    content=chunk_text,
-                    chunk_index=i,
-                    embedding_status="pending"
-                )
+                # 保存块信息
+                chunk_info = {
+                    "chunk_id": chunk_id,
+                    "file_id": file_id,
+                    "content": chunk.page_content,
+                    "chunk_index": i,
+                    "embedding_status": "completed",
+                    "metadata": {
+                        "source": chunk.metadata.get("source", file_path),
+                        "page": chunk.metadata.get("page", None)
+                    }
+                }
                 
-                # 更新块索引
-                self.chunks_index[chunk_id] = chunk_info.dict()
+                self.chunks_index[chunk_id] = chunk_info
                 
-                # 生成嵌入向量
-                try:
-                    embedding = get_embedding(chunk_text)
-                    
-                    # 添加到FAISS索引
-                    self.index.add(np.array([embedding]))
-                    self.chunk_ids.append(chunk_id)
-                    
-                    # 更新块状态
-                    self.chunks_index[chunk_id]["embedding_status"] = "completed"
-                    chunk_count += 1
-                    
-                except Exception as e:
-                    logger.error(f"生成文本块嵌入向量失败: {str(e)}")
-                    self.chunks_index[chunk_id]["embedding_status"] = "failed"
+                # 准备向量存储数据
+                texts.append(chunk.page_content)
+                metadata = {
+                    "chunk_id": chunk_id,
+                    "file_id": file_id,
+                    "chunk_index": i
+                }
+                metadatas.append(metadata)
+                
+                chunk_count += 1
+            
+            # 添加到向量存储
+            if texts:
+                if self.vectorstore is None:
+                    # 创建新的向量存储
+                    self.vectorstore = FAISS.from_texts(
+                        texts=texts,
+                        embedding=self.embedding_model,
+                        metadatas=metadatas
+                    )
+                else:
+                    # 添加到现有向量存储
+                    self.vectorstore.add_texts(texts=texts, metadatas=metadatas)
+                
+                # 保存索引
+                index_dir = os.path.dirname(self.KNOWLEDGE_INDEX_PATH)
+                index_name = os.path.basename(self.KNOWLEDGE_INDEX_PATH).split('.')[0]
+                self.vectorstore.save_local(index_dir, index_name)
             
             # 更新文件状态和块数量
             if file_id in self.files_index:
@@ -314,95 +434,6 @@ class KnowledgeService:
             if file_id in self.files_index:
                 self.files_index[file_id]["embedding_status"] = "failed"
                 self._save_index()
-    
-    def _extract_file_content(self, file_path: str, content_type: str) -> str:
-        """提取文件内容
-        
-        Args:
-            file_path: 文件路径
-            content_type: 文件类型
-            
-        Returns:
-            str: 文件内容
-        """
-        try:
-            # 根据文件类型提取内容
-            if content_type == "text/plain" or content_type == "text/markdown" or content_type == "text/csv":
-                with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-                    return f.read()
-            
-            elif content_type == "application/json":
-                with open(file_path, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                    return json.dumps(data, ensure_ascii=False)
-            
-            elif content_type == "application/pdf":
-                # 这里需要使用PDF解析库，如PyPDF2或pdfplumber
-                # 为简化示例，返回占位符
-                return f"[PDF文件内容: {file_path}]"
-            
-            elif "word" in content_type:
-                # 这里需要使用Word解析库，如python-docx
-                # 为简化示例，返回占位符
-                return f"[Word文件内容: {file_path}]"
-            
-            elif "excel" in content_type:
-                # 这里需要使用Excel解析库，如pandas或openpyxl
-                # 为简化示例，返回占位符
-                return f"[Excel文件内容: {file_path}]"
-            
-            else:
-                return f"[不支持的文件类型: {content_type}]"
-                
-        except Exception as e:
-            logger.error(f"提取文件内容失败: {str(e)}")
-            return f"[提取内容失败: {str(e)}]"
-    
-    def _split_text_into_chunks(self, text: str, chunk_size: int, chunk_overlap: int) -> List[str]:
-        """将文本分割成块
-        
-        Args:
-            text: 要分割的文本
-            chunk_size: 块大小
-            chunk_overlap: 块重叠大小
-            
-        Returns:
-            List[str]: 文本块列表
-        """
-        if not text:
-            return []
-        
-        chunks = []
-        start = 0
-        text_length = len(text)
-        
-        while start < text_length:
-            # 计算当前块的结束位置
-            end = min(start + chunk_size, text_length)
-            
-            # 如果不是最后一块，尝试在句子或段落边界分割
-            if end < text_length:
-                # 尝试在段落边界分割
-                paragraph_end = text.rfind('\n\n', start, end)
-                if paragraph_end > start + chunk_size // 2:
-                    end = paragraph_end + 2
-                else:
-                    # 尝试在句子边界分割
-                    sentence_end = text.rfind('. ', start, end)
-                    if sentence_end > start + chunk_size // 2:
-                        end = sentence_end + 2
-            
-            # 添加当前块
-            chunks.append(text[start:end])
-            
-            # 更新下一块的起始位置
-            start = end - chunk_overlap
-            
-            # 确保起始位置有效
-            if start < 0 or start >= text_length:
-                break
-        
-        return chunks
     
     def get_file_list(self, page: int = 1, page_size: int = 10) -> Dict[str, Any]:
         """获取文件列表
@@ -435,7 +466,7 @@ class KnowledgeService:
             file_objects = [KnowledgeFile(**item) for item in page_items]
             
             return {
-                "files": file_objects,
+                "items": file_objects,
                 "total": total,
                 "page": page,
                 "page_size": page_size,
@@ -477,7 +508,7 @@ class KnowledgeService:
                             "chunk_id": chunk_id,
                             "content": chunk_info["content"][:200] + ("..." if len(chunk_info["content"]) > 200 else ""),
                             "chunk_index": chunk_info["chunk_index"],
-                            "embedding_status": chunk_info["embedding_status"]
+                            "embedding_status": chunk_info.get("embedding_status", "unknown")
                         })
             
             return {
@@ -519,7 +550,7 @@ class KnowledgeService:
             # 删除文件索引
             del self.files_index[file_id]
             
-            # 删除文件的文本块
+            # 删除文件的文本块和向量
             chunk_ids_to_delete = []
             for chunk_id, chunk_info in self.chunks_index.items():
                 if chunk_info["file_id"] == file_id:
@@ -528,8 +559,8 @@ class KnowledgeService:
             for chunk_id in chunk_ids_to_delete:
                 del self.chunks_index[chunk_id]
             
-            # 重建FAISS索引
-            self._rebuild_faiss_index()
+            # 重建向量存储（LangChain的FAISS实现不支持直接删除向量）
+            self._rebuild_vectorstore()
             
             # 保存索引
             self._save_index()
@@ -542,36 +573,53 @@ class KnowledgeService:
             logger.error(f"删除文件失败: {str(e)}")
             raise HTTPException(status_code=500, detail=f"删除文件失败: {str(e)}")
     
-    def _rebuild_faiss_index(self):
-        """重建FAISS索引"""
+    def _rebuild_vectorstore(self):
+        """重建向量存储"""
         try:
-            # 创建新索引
-            new_index = faiss.IndexFlatL2(self.dimension)
-            new_chunk_ids = []
+            # 收集所有文本块
+            texts = []
+            metadatas = []
             
-            # 遍历所有文本块
             for chunk_id, chunk_info in self.chunks_index.items():
-                if chunk_info["embedding_status"] == "completed":
-                    try:
-                        # 重新生成嵌入向量
-                        embedding = get_embedding(chunk_info["content"])
-                        
-                        # 添加到新索引
-                        new_index.add(np.array([embedding]))
-                        new_chunk_ids.append(chunk_id)
-                        
-                    except Exception as e:
-                        logger.error(f"重建索引时生成嵌入向量失败: {str(e)}")
-                        self.chunks_index[chunk_id]["embedding_status"] = "failed"
+                texts.append(chunk_info["content"])
+                metadatas.append({
+                    "chunk_id": chunk_id,
+                    "file_id": chunk_info["file_id"],
+                    "chunk_index": chunk_info["chunk_index"]
+                })
             
-            # 更新索引
-            self.index = new_index
-            self.chunk_ids = new_chunk_ids
+            # 创建新的向量存储
+            if texts:
+                self.vectorstore = FAISS.from_texts(
+                    texts=texts,
+                    embedding=self.embedding_model,
+                    metadatas=metadatas
+                )
+            else:
+                # 如果没有文本，创建空的向量存储
+                self.vectorstore = FAISS.from_texts(
+                    texts=["Empty index placeholder"],
+                    embedding=self.embedding_model,
+                    metadatas=[{"chunk_id": "empty", "file_id": "empty", "chunk_index": 0}]
+                )
+                # 然后删除占位符
+                if hasattr(self.vectorstore, 'index') and hasattr(self.vectorstore.index, 'ntotal') and self.vectorstore.index.ntotal > 0:
+                    # 创建全新的空索引
+                    self.vectorstore = FAISS.from_texts(
+                        texts=[],
+                        embedding=self.embedding_model,
+                        metadatas=[]
+                    )
             
-            logger.info(f"FAISS索引重建完成，包含 {len(self.chunk_ids)} 个文本块向量")
+            # 保存索引
+            index_dir = os.path.dirname(self.KNOWLEDGE_INDEX_PATH)
+            index_name = os.path.basename(self.KNOWLEDGE_INDEX_PATH).split('.')[0]
+            self.vectorstore.save_local(index_dir, index_name)
+            
+            logger.info(f"向量存储重建完成，包含 {len(texts)} 个文本块向量")
             
         except Exception as e:
-            logger.error(f"重建FAISS索引失败: {str(e)}")
+            logger.error(f"重建向量存储失败: {str(e)}")
     
     def search_knowledge(self, query: str, limit: int = 10, file_ids: List[str] = None) -> List[KnowledgeSearchResult]:
         """搜索知识库
@@ -585,62 +633,61 @@ class KnowledgeService:
             List[KnowledgeSearchResult]: 搜索结果列表
         """
         try:
-            # 检查索引是否为空
-            if self.index.ntotal == 0:
+            # 检查向量存储是否为空
+            if self.vectorstore is None:
                 return []
             
-            # 获取查询的嵌入向量
-            query_embedding = get_embedding(query)
+            # 使用LangChain向量检索
+            search_kwargs = {}
             
-            # 搜索最相似的向量
-            k = min(limit * 2, self.index.ntotal)  # 获取更多结果，以便过滤
-            distances, indices = self.index.search(np.array([query_embedding]), k)
+            # 如果有文件ID限制，使用过滤器
+            if file_ids:
+                search_kwargs["filter"] = lambda metadata: metadata["file_id"] in file_ids
+            
+            # 执行检索
+            search_results = self.vectorstore.similarity_search_with_score(
+                query=query,
+                k=limit,
+                **search_kwargs
+            )
             
             results = []
             
-            for i, idx in enumerate(indices[0]):
-                if idx < len(self.chunk_ids):
-                    chunk_id = self.chunk_ids[idx]
-                    
-                    # 检查文本块是否存在
-                    if chunk_id not in self.chunks_index:
-                        continue
-                    
-                    chunk_info = self.chunks_index[chunk_id]
-                    file_id = chunk_info["file_id"]
-                    
-                    # 如果指定了文件ID列表，则只返回这些文件的结果
-                    if file_ids and file_id not in file_ids:
-                        continue
-                    
-                    # 检查文件是否存在
-                    if file_id not in self.files_index:
-                        continue
-                    
-                    file_info = self.files_index[file_id]
-                    
-                    # 将L2距离转换为相似度分数（0-1之间）
-                    similarity = 1 / (1 + distances[0][i])
-                    
-                    # 创建搜索结果
-                    result = KnowledgeSearchResult(
-                        chunk_id=chunk_id,
-                        file_id=file_id,
-                        filename=file_info["filename"],
-                        content=chunk_info["content"],
-                        similarity=similarity,
-                        metadata={
-                            "file_type": file_info["file_type"],
-                            "upload_time": file_info["upload_time"],
-                            "chunk_index": chunk_info["chunk_index"]
-                        }
-                    )
-                    
-                    results.append(result)
-                    
-                    # 如果已经有足够的结果，则停止
-                    if len(results) >= limit:
-                        break
+            for doc, score in search_results:
+                # 获取元数据
+                metadata = doc.metadata
+                chunk_id = metadata.get("chunk_id")
+                file_id = metadata.get("file_id")
+                
+                # 检查文本块是否存在
+                if chunk_id not in self.chunks_index:
+                    continue
+                
+                # 检查文件是否存在
+                if file_id not in self.files_index:
+                    continue
+                
+                chunk_info = self.chunks_index[chunk_id]
+                file_info = self.files_index[file_id]
+                
+                # 计算相似度 (转换距离为相似度分数)
+                similarity = 1 / (1 + score)
+                
+                # 创建搜索结果
+                result = KnowledgeSearchResult(
+                    chunk_id=chunk_id,
+                    file_id=file_id,
+                    filename=file_info["filename"],
+                    content=chunk_info["content"],
+                    similarity=similarity,
+                    metadata={
+                        "file_type": file_info["file_type"],
+                        "upload_time": file_info["upload_time"],
+                        "chunk_index": chunk_info["chunk_index"]
+                    }
+                )
+                
+                results.append(result)
             
             return results
             

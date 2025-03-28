@@ -13,41 +13,51 @@ from core.embedding import get_embedding, rerank_documents
 from core.memory_store import memory_store
 from db.neo4j_store import neo4j_db
 from utils.text import calculate_tokens_and_cost
+from db.mysql_store import mysql_db
 
 class MemoryService:
     @staticmethod
-    def save_conversation(user_message: str, ai_response: str) -> str:
+    def save_conversation(user_message: str, ai_response: str, conversation_id: Optional[int] = None) -> str:
         """保存对话到记忆存储
         
         Args:
             user_message: 用户消息
             ai_response: AI回答
+            conversation_id: 对话ID，默认为None表示全局记忆
             
         Returns:
             str: 保存的记忆时间戳
         """
         try:
+            # 如果指定了对话ID，先检查该对话是否存在
+            if conversation_id is not None:
+                conversation = mysql_db.get_conversation(conversation_id)
+                if not conversation:
+                    logger.warning(f"保存记忆失败：对话ID {conversation_id} 不存在，将作为全局记忆保存")
+                    conversation_id = None
+            
             # 构建完整文本用于计算嵌入向量
             full_text = f"用户: {user_message}\n助手: {ai_response}"
             
             # 获取文本的嵌入向量
             embedding = get_embedding(full_text)
             
-            # 搜索相似的记忆
-            similar_memories = memory_store.search(embedding, k=5)
+            # 搜索相似的记忆（同一对话内）
+            similar_memories = memory_store.search(embedding, k=5, conversation_id=conversation_id)
             
             # 创建Neo4j节点并建立关系
             timestamp = neo4j_db.create_memory_with_relations(
                 user_message=user_message,
                 ai_response=ai_response,
                 similar_memories=similar_memories,
-                similarity_threshold=settings.RETRIEVAL_MIN_SIMILARITY
+                similarity_threshold=settings.RETRIEVAL_MIN_SIMILARITY,
+                conversation_id=conversation_id
             )
             
             # 保存到FAISS
-            memory_store.add_text(full_text, embedding, timestamp)
+            memory_store.add_text(full_text, embedding, timestamp, conversation_id)
             
-            logger.info(f"对话已保存，时间戳: {timestamp}")
+            logger.info(f"对话已保存，时间戳: {timestamp}, 对话ID: {conversation_id or '全局'}")
             return timestamp
             
         except Exception as e:
@@ -55,106 +65,139 @@ class MemoryService:
             raise
 
     @staticmethod
-    def get_context(query: str, max_memories: int = 5) -> Tuple[str, List[Dict[str, Any]]]:
-        """获取与查询相关的上下文
+    def get_context(query: str, max_memories: int = 5, conversation_id: Optional[int] = None) -> Tuple[str, List[Dict[str, Any]]]:
+        """获取上下文：结合相似记忆和最近记忆
         
         Args:
             query: 用户查询
-            max_memories: 最大返回记忆数量
+            max_memories: 最大记忆数量
+            conversation_id: 对话ID
             
         Returns:
             Tuple[str, List[Dict]]: (格式化的上下文字符串, 使用的记忆列表)
         """
         try:
-            # 获取查询的嵌入向量
-            query_embedding = get_embedding(query)
+            context_parts = []
+            used_memories = []
             
-            # 从FAISS搜索相似记忆
-            similar_memories = memory_store.search(query_embedding, k=max_memories)
-            
-            # 如果找到相似记忆，获取图关系相关记忆
-            if similar_memories:
-                # 获取最相似记忆的时间戳
-                most_similar_timestamp = similar_memories[0].timestamp
-                
-                # 获取图关系相关记忆
-                graph_related = neo4j_db.get_related_memories(
-                    timestamp=most_similar_timestamp,
-                    max_depth=settings.RETRIEVAL_GRAPH_RELATED_DEPTH,
-                    min_similarity=settings.RETRIEVAL_MIN_SIMILARITY
+            if settings.USE_MYSQL_CONTEXT and conversation_id:
+                # 从MySQL获取最近的对话历史，使用滑动窗口
+                # 使用配置的对话轮数
+                window_size = settings.CONVERSATION_CONTEXT_WINDOW_SIZE
+                messages = mysql_db.get_conversation_messages(
+                    conversation_id=conversation_id,
+                    limit=window_size,
+                    offset=0,  # 从最新的消息开始
+                    sort_asc=True  # 按时间升序排序，从旧到新
                 )
                 
-                # 合并记忆并去重
-                all_memories = []
-                seen_timestamps = set()
+                if messages and len(messages) > 0:
+                    # 不需要倒序，因为已经按时间升序排序了
+                    for msg in messages:
+                        memory_info = {
+                            "timestamp": msg["timestamp"],
+                            "user_message": msg["user_message"],
+                            "ai_response": msg["ai_response"],
+                            "source": "mysql_history",
+                            "conversation_id": conversation_id
+                        }
+                        context_parts.append(f"用户: {msg['user_message']}\n助手: {msg['ai_response']}\n")
+                        used_memories.append(memory_info)
+                    
+                    logger.info(f"从MySQL获取了 {len(messages)} 轮对话历史作为上下文，对话ID: {conversation_id}")
+                    
+                    # 如果已经获取到了足够的上下文，就不再获取向量记忆
+                    if len(messages) >= window_size / 2:
+                        return "\n".join(context_parts), used_memories
+            
+            # 如果没有从MySQL获取到足够的上下文或者不使用MySQL上下文，继续使用向量搜索
+            # 获取嵌入向量
+            embedding = get_embedding(query)
+            
+            # 从FAISS和Neo4j获取相关记忆
+            similar_memories = memory_store.search(embedding, k=max_memories, conversation_id=conversation_id)
+            
+            # 如果找到了相似记忆，使用它们
+            if similar_memories:
+                logger.info(f"找到 {len(similar_memories)} 条相似记忆")
                 
-                # 首先添加向量搜索结果
+                # 按相似度从高到低排序
+                similar_memories.sort(key=lambda x: x.similarity if x.similarity is not None else 0, reverse=True)
+                
                 for memory in similar_memories:
-                    if memory.timestamp not in seen_timestamps:
-                        all_memories.append(memory)
-                        seen_timestamps.add(memory.timestamp)
-                
-                # 然后添加图关系结果
-                for memory in graph_related:
-                    if memory.timestamp not in seen_timestamps:
-                        all_memories.append(memory)
-                        seen_timestamps.add(memory.timestamp)
-                
-                # 按相似度排序
-                all_memories.sort(key=lambda x: x.similarity if x.similarity is not None else 0, reverse=True)
-                
-                # 限制返回数量
-                all_memories = all_memories[:max_memories]
-                
-                # 构建上下文字符串
-                context = ""
-                memory_list = []
-                
-                for memory in all_memories:
-                    context += f"用户: {memory.user_message}\n助手: {memory.ai_response}\n\n"
-                    memory_list.append({
+                    memory_info = {
                         "timestamp": memory.timestamp,
                         "user_message": memory.user_message,
                         "ai_response": memory.ai_response,
                         "similarity": memory.similarity,
-                        "topic": memory.topic
-                    })
-                
-                logger.info(f"为查询构建了上下文，使用了 {len(all_memories)} 条记忆")
-                return context, memory_list
+                        "source": "vector_search",
+                        "conversation_id": memory.conversation_id
+                    }
+                    
+                    # 只添加未添加过的记忆
+                    if memory_info["timestamp"] not in [m["timestamp"] for m in used_memories]:
+                        context_parts.append(f"用户: {memory.user_message}\n助手: {memory.ai_response}\n")
+                        used_memories.append(memory_info)
             
-            # 如果没有找到相似记忆，返回空字符串
-            logger.info("没有找到与查询相关的记忆")
-            return "", []
+            # 如果没有足够的上下文，从Neo4j获取最近记忆（如果不使用MySQL上下文或MySQL上下文不足）
+            if len(used_memories) < max_memories and not settings.USE_MYSQL_CONTEXT:
+                related_memories = neo4j_db.get_recent_memories(
+                    limit=max_memories - len(used_memories),
+                    conversation_id=conversation_id
+                )
+                
+                if related_memories:
+                    logger.info(f"从Neo4j获取了 {len(related_memories)} 条最近记忆")
+                    
+                    for memory in related_memories:
+                        memory_info = {
+                            "timestamp": memory.timestamp,
+                            "user_message": memory.user_message,
+                            "ai_response": memory.ai_response,
+                            "source": "recent",
+                            "conversation_id": memory.conversation_id
+                        }
+                        
+                        # 只添加未添加过的记忆
+                        if memory_info["timestamp"] not in [m["timestamp"] for m in used_memories]:
+                            context_parts.append(f"用户: {memory.user_message}\n助手: {memory.ai_response}\n")
+                            used_memories.append(memory_info)
+            
+            # 如果仍然没有足够的上下文，但不想要空上下文，可以添加一条默认消息
+            if not context_parts:
+                logger.info("没有找到任何相关上下文")
+            
+            return "\n".join(context_parts), used_memories
             
         except Exception as e:
             logger.error(f"获取上下文失败: {str(e)}")
             return "", []
 
     @staticmethod
-    def search_memories(keyword: str, limit: int = 20) -> List[MemoryResponse]:
+    def search_memories(keyword: str, limit: int = 20, conversation_id: Optional[int] = None) -> List[MemoryResponse]:
         """搜索记忆
         
         Args:
             keyword: 搜索关键词
             limit: 返回结果数量限制
+            conversation_id: 限定对话ID
             
         Returns:
             List[MemoryResponse]: 匹配的记忆列表
         """
         try:
             # 使用Neo4j搜索
-            memories = neo4j_db.search_memories_by_keyword(keyword, limit)
+            memories = neo4j_db.search_memories_by_keyword(keyword, limit, conversation_id)
             
             if not memories:
-                logger.info(f"未找到包含关键词 '{keyword}' 的记忆，尝试使用语义搜索")
+                logger.info(f"未找到包含关键词 '{keyword}' 的记忆，尝试使用语义搜索，对话ID: {conversation_id or '全局'}")
                 
                 # 尝试使用重排序API进行语义搜索
                 # 获取所有记忆的预览
-                recent_memories = neo4j_db.get_recent_memories(limit=100)
+                recent_memories = neo4j_db.get_recent_memories(limit=100, conversation_id=conversation_id)
                 
                 if not recent_memories:
-                    logger.info("数据库中没有记忆")
+                    logger.info(f"数据库中没有记忆，对话ID: {conversation_id or '全局'}")
                     return []
                 
                 # 准备重排序的文档
@@ -167,7 +210,7 @@ class MemoryService:
                 rerank_results = rerank_documents(keyword, documents, top_n=limit)
                 
                 if not rerank_results:
-                    logger.info("语义搜索未找到相关结果")
+                    logger.info(f"语义搜索未找到相关结果，对话ID: {conversation_id or '全局'}")
                     return []
                 
                 # 根据重排序结果获取记忆
@@ -186,7 +229,8 @@ class MemoryService:
                         user_message=memory.user_message,
                         ai_response=memory.ai_response,
                         topic=memory.topic,
-                        similarity=memory.similarity
+                        similarity=memory.similarity,
+                        conversation_id=memory.conversation_id
                     ) for memory in semantic_memories
                 ]
                 
@@ -197,7 +241,8 @@ class MemoryService:
                     user_message=memory.user_message,
                     ai_response=memory.ai_response,
                     topic=memory.topic,
-                    similarity=memory.similarity
+                    similarity=memory.similarity,
+                    conversation_id=memory.conversation_id
                 ) for memory in memories
             ]
             
@@ -252,10 +297,34 @@ class MemoryService:
             memory_store.clear_memory()
             
             logger.info("已清除所有记忆数据")
-            return neo4j_success
-            
+            return True
         except Exception as e:
-            logger.error(f"清除记忆数据失败: {str(e)}")
+            logger.error(f"清除所有记忆数据失败: {str(e)}")
+            return False
+
+    @staticmethod
+    def clear_conversation_memories(conversation_id: int) -> bool:
+        """清除指定对话的所有记忆数据
+        
+        Args:
+            conversation_id: 对话ID
+            
+        Returns:
+            bool: 操作是否成功
+        """
+        try:
+            logger.info(f"开始清除对话 {conversation_id} 的所有记忆数据")
+            
+            # 清除Neo4j数据
+            neo4j_success = neo4j_db.clear_conversation_memories(conversation_id)
+            
+            # 清除FAISS数据
+            memory_store.clear_memory(conversation_id)
+            
+            logger.info(f"已完成清除对话 {conversation_id} 的所有记忆数据")
+            return True
+        except Exception as e:
+            logger.error(f"清除对话 {conversation_id} 的记忆数据失败: {str(e)}")
             return False
 
     @staticmethod

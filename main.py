@@ -93,8 +93,8 @@ def start():
     logger.info(f"启动 {settings.APP_NAME} 服务")
     uvicorn.run(
         "main:app",
-        host="0.0.0.0",
-        port=8000,
+        host="localhost",
+        port=9999,
         reload=settings.DEBUG
     )
 

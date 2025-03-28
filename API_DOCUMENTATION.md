@@ -646,4 +646,338 @@ async function searchMemory(query, limit = 5) {
   });
   return response.json();
 }
+```
+
+## 多对话管理 API
+
+多对话管理API允许创建和管理多个对话，每个对话有自己的上下文记忆和历史记录。
+
+### 创建新对话
+
+创建一个新的对话。
+
+**请求**
+
+```http
+POST /conversations
+```
+
+**请求体**
+
+```json
+{
+  "title": "示例对话",
+  "description": "这是一个示例对话",
+  "settings": {
+    "use_memory": true,
+    "use_knowledge": false,
+    "knowledge_query_mode": "auto",
+    "temperature": 0.7,
+    "max_tokens": 4000
+  }
+}
+```
+
+| 参数 | 类型 | 必填 | 描述 |
+| --- | --- | --- | --- |
+| title | string | 是 | 对话标题 |
+| description | string | 否 | 对话描述 |
+| settings | object | 否 | 对话设置 |
+
+**响应**
+
+```json
+{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "title": "示例对话",
+  "description": "这是一个示例对话",
+  "created_at": "2023-04-28T12:00:00",
+  "updated_at": "2023-04-28T12:00:00",
+  "settings": {
+    "use_memory": true,
+    "use_knowledge": false,
+    "knowledge_query_mode": "auto",
+    "temperature": 0.7,
+    "max_tokens": 4000
+  },
+  "message_count": 0
+}
+```
+
+### 获取对话列表
+
+获取所有对话的列表。
+
+**请求**
+
+```http
+GET /conversations?page=1&page_size=20
+```
+
+**查询参数**
+
+| 参数 | 类型 | 必填 | 默认值 | 描述 |
+| --- | --- | --- | --- | --- |
+| page | integer | 否 | 1 | 页码，从1开始 |
+| page_size | integer | 否 | 20 | 每页数量 |
+
+**响应**
+
+```json
+{
+  "items": [
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440000",
+      "title": "示例对话",
+      "description": "这是一个示例对话",
+      "created_at": "2023-04-28T12:00:00",
+      "updated_at": "2023-04-28T12:00:00",
+      "settings": {
+        "use_memory": true,
+        "use_knowledge": false,
+        "knowledge_query_mode": "auto",
+        "temperature": 0.7,
+        "max_tokens": 4000
+      },
+      "message_count": 10,
+      "last_activity": "2023-04-28T14:30:00"
+    }
+  ],
+  "total": 1,
+  "page": 1,
+  "page_size": 20,
+  "total_pages": 1
+}
+```
+
+### 获取对话详情
+
+获取特定对话的详细信息。
+
+**请求**
+
+```http
+GET /conversations/{conversation_id}
+```
+
+**路径参数**
+
+| 参数 | 类型 | 描述 |
+| --- | --- | --- |
+| conversation_id | string | 对话ID |
+
+**响应**
+
+```json
+{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "title": "示例对话",
+  "description": "这是一个示例对话",
+  "created_at": "2023-04-28T12:00:00",
+  "updated_at": "2023-04-28T12:00:00",
+  "settings": {
+    "use_memory": true,
+    "use_knowledge": false,
+    "knowledge_query_mode": "auto",
+    "temperature": 0.7,
+    "max_tokens": 4000
+  },
+  "message_count": 10
+}
+```
+
+### 更新对话
+
+更新特定对话的信息。
+
+**请求**
+
+```http
+PUT /conversations/{conversation_id}
+```
+
+**路径参数**
+
+| 参数 | 类型 | 描述 |
+| --- | --- | --- |
+| conversation_id | string | 对话ID |
+
+**请求体**
+
+```json
+{
+  "title": "更新后的标题",
+  "description": "更新后的描述",
+  "settings": {
+    "use_memory": false,
+    "use_knowledge": true,
+    "temperature": 0.8
+  }
+}
+```
+
+**响应**
+
+返回更新后的对话详情，格式与获取对话详情相同。
+
+### 删除对话
+
+删除特定对话及其所有消息和记忆。
+
+**请求**
+
+```http
+DELETE /conversations/{conversation_id}
+```
+
+**路径参数**
+
+| 参数 | 类型 | 描述 |
+| --- | --- | --- |
+| conversation_id | string | 对话ID |
+
+**响应**
+
+```json
+{
+  "message": "对话 550e8400-e29b-41d4-a716-446655440000 已成功删除"
+}
+```
+
+### 获取对话消息
+
+获取特定对话的消息历史。
+
+**请求**
+
+```http
+GET /conversations/{conversation_id}/messages?page=1&page_size=20
+```
+
+**路径参数**
+
+| 参数 | 类型 | 描述 |
+| --- | --- | --- |
+| conversation_id | string | 对话ID |
+
+**查询参数**
+
+| 参数 | 类型 | 必填 | 默认值 | 描述 |
+| --- | --- | --- | --- | --- |
+| page | integer | 否 | 1 | 页码，从1开始 |
+| page_size | integer | 否 | 20 | 每页数量 |
+
+**响应**
+
+```json
+{
+  "items": [
+    {
+      "id": 1,
+      "conversation_id": "550e8400-e29b-41d4-a716-446655440000",
+      "timestamp": "2023-04-28T12:00:00.000000",
+      "user_message": "你好，AI助手",
+      "ai_response": "你好！我是AI助手，有什么可以帮助你的吗？",
+      "tokens_input": 80,
+      "tokens_output": 30,
+      "cost": 0.00022,
+      "created_at": "2023-04-28T12:00:00",
+      "metadata": {
+        "memories_used": [],
+        "knowledge_used": [],
+        "use_memory": true,
+        "use_knowledge": false
+      }
+    }
+  ],
+  "total": 1,
+  "page": 1,
+  "page_size": 20,
+  "total_pages": 1,
+  "conversation_id": "550e8400-e29b-41d4-a716-446655440000",
+  "conversation_title": "示例对话"
+}
+```
+
+### 清除对话消息
+
+清除特定对话的所有消息和记忆。
+
+**请求**
+
+```http
+DELETE /conversations/{conversation_id}/messages
+```
+
+**路径参数**
+
+| 参数 | 类型 | 描述 |
+| --- | --- | --- |
+| conversation_id | string | 对话ID |
+
+**请求体**
+
+```json
+{
+  "confirm": true
+}
+```
+
+**响应**
+
+```json
+{
+  "message": "对话 550e8400-e29b-41d4-a716-446655440000 的所有消息和记忆已成功清除"
+}
+```
+
+### 对话聊天
+
+在特定对话内进行聊天，自动保存到对话历史记录中。
+
+**请求**
+
+```http
+POST /conversation_chat
+```
+
+**请求体**
+
+```json
+{
+  "conversation_id": "550e8400-e29b-41d4-a716-446655440000",
+  "message": "你好，这是一条测试消息",
+  "use_memory": true,
+  "use_knowledge": false,
+  "knowledge_query": null,
+  "knowledge_limit": 3,
+  "temperature": 0.7,
+  "max_tokens": 4000
+}
+```
+
+| 参数 | 类型 | 必填 | 描述 |
+| --- | --- | --- | --- |
+| conversation_id | string | 是 | 对话ID |
+| message | string | 是 | 用户消息 |
+| use_memory | boolean | 否 | 是否使用记忆功能 |
+| use_knowledge | boolean | 否 | 是否使用知识库 |
+| knowledge_query | string | 否 | 知识库搜索查询，如果为null则使用message |
+| knowledge_limit | integer | 否 | 知识库搜索结果数量限制 |
+| temperature | number | 否 | 温度参数，控制随机性 |
+| max_tokens | integer | 否 | 最大生成token数 |
+
+**响应**
+
+```json
+{
+  "message": "你好！这是AI助手的回复。",
+  "input_tokens": 120,
+  "output_tokens": 50,
+  "cost": 0.00034,
+  "memories_used": [],
+  "knowledge_used": [],
+  "timestamp": "2023-04-28T12:00:00.000000",
+  "conversation_id": "550e8400-e29b-41d4-a716-446655440000"
+}
 ``` 

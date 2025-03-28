@@ -8,8 +8,13 @@ class ChatRequest(BaseModel):
     use_knowledge: bool = False
     knowledge_query: Optional[str] = None
     knowledge_limit: int = 3
+    use_web_search: bool = False
+    web_search_query: Optional[str] = None
+    web_search_limit: int = 3
+    conversation_files: Optional[List[str]] = None  # 关联到此对话的文件ID列表
     temperature: Optional[float] = None
     max_tokens: Optional[int] = None
+    conversation_id: Optional[int] = None
 
 class ChatResponse(BaseModel):
     """聊天响应模型"""
@@ -19,7 +24,9 @@ class ChatResponse(BaseModel):
     cost: float
     memories_used: List[Dict[str, Any]] = []
     knowledge_used: List[Any] = []
+    web_search_used: List[Dict[str, Any]] = []
     timestamp: str
+    conversation_id: Optional[int] = None
 
 class TokenCost(BaseModel):
     """Token计算和费用模型"""

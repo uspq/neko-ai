@@ -4,8 +4,11 @@ from typing import List, Dict, Any, Union
 from core.config import settings
 from utils.logger import logger
 
+# LangChain相关导入
+from langchain_core.documents import Document
+
 def get_embedding(text: str) -> np.ndarray:
-    """使用 API 获取文本嵌入向量"""
+    """获取文本嵌入向量，直接使用API"""
     if not text or not isinstance(text, str):
         raise ValueError("输入文本不能为空且必须是字符串类型")
         
@@ -21,6 +24,11 @@ def get_embedding(text: str) -> np.ndarray:
         logger.warning(f"文本过长 ({len(text)} 字符)，截断至 {max_chars} 字符")
         text = text[:max_chars]
     
+    # 直接使用API获取嵌入向量
+    return get_embedding_from_api(text)
+
+def get_embedding_from_api(text: str) -> np.ndarray:
+    """使用 API 获取文本嵌入向量"""
     # 准备API请求
     headers = {
         "Authorization": f"Bearer {settings.API_KEY}",
@@ -78,6 +86,32 @@ def get_embedding(text: str) -> np.ndarray:
         if 'response' in locals() and response and hasattr(response, 'text'):
             logger.error(f"API响应: {response.text}")
         raise Exception(f"获取embedding失败: {str(e)}")
+
+def get_embeddings(texts: List[str]) -> List[np.ndarray]:
+    """批量获取文本嵌入向量
+    
+    Args:
+        texts: 文本列表
+        
+    Returns:
+        List[np.ndarray]: 嵌入向量列表
+    """
+    if not texts:
+        return []
+        
+    embeddings = []
+    
+    # 单独处理每个文本，使用API获取嵌入向量
+    for text in texts:
+        try:
+            embedding = get_embedding(text)
+            embeddings.append(embedding)
+        except Exception as e:
+            logger.error(f"获取嵌入向量失败: {str(e)}")
+            # 插入一个零向量作为占位符
+            embeddings.append(np.zeros(settings.EMBEDDING_DIMENSION, dtype=np.float32))
+    
+    return embeddings
 
 def rerank_documents(query: str, documents: List[str], top_n: int = None) -> List[Dict[str, Any]]:
     """使用重排序API对文档进行重排序

@@ -81,8 +81,38 @@ storage:
     index_type: "flat"
     # 是否定期重建索引
     rebuild_index: false
+    # 索引文件路径
+    index_path: "data/faiss_index.pkl"
     # 最大索引大小（记录数，超过会触发重建）
     max_index_size: 1000000
+    
+  # MySQL配置
+  mysql:
+    # MySQL主机地址
+    host: "localhost"
+    # MySQL端口
+    port: 3306
+    # MySQL用户名
+    user: "root"
+    # MySQL密码
+    password: "password"
+    # MySQL数据库名
+    database: "neko_ai"
+    # 连接池大小
+    pool_size: 5
+
+# 多对话配置
+conversation:
+  # 默认对话ID
+  default_id: "default"
+  # 最大对话数量
+  max_conversations: 100
+  # 对话标题最大长度
+  title_max_length: 100
+  # 对话上下文窗口大小（对话轮数）
+  context_window_size: 15
+  # 是否优先从MySQL获取上下文
+  use_mysql_context: true
 
 # 应用配置
 app:
@@ -95,9 +125,9 @@ app:
   # 是否开启调试模式
   debug: false
   # 服务器主机地址
-  host: "0.0.0.0"
+  host: "localhost"
   # 服务器端口
-  port: 8000
+  port: 9999
 
 # 文件路径配置
 paths:
