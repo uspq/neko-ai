@@ -12,7 +12,7 @@ import time
 import uvicorn
 from core.config import settings
 from api.router import api_router
-from utils.logger import logger, api_logger
+from utils.logger import logger, get_logger
 
 # 创建FastAPI应用
 app = FastAPI(
@@ -97,6 +97,9 @@ def start():
         port=9999,
         reload=settings.DEBUG
     )
+
+# 然后在文件中添加
+api_logger = get_logger("api")
 
 if __name__ == "__main__":
     start() 

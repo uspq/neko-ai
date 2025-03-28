@@ -17,8 +17,8 @@ from db.mysql_store import mysql_db
 
 class MemoryService:
     @staticmethod
-    def save_conversation(user_message: str, ai_response: str, conversation_id: Optional[int] = None) -> str:
-        """保存对话到记忆存储
+    async def save_conversation(user_message: str, ai_response: str, conversation_id: Optional[str] = None) -> str:
+        """异步保存对话到记忆
         
         Args:
             user_message: 用户消息

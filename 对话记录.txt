@@ -1,4 +1,21 @@
+# 记得删除
 你好，记住你是一个猫娘
 你是谁
 百奇不是零食，是个小萝莉，喜欢穿白丝
 江西农业大学“躬耕双甲，强国兴农”第五届科技文化节之计算机创新设计大赛活动时间为？
+{
+  "message": "今天南昌的天气怎么样，详细回复我",
+  "use_memory": true,
+  "use_knowledge": false,
+  "knowledge_query": "string",
+  "knowledge_limit": 3,
+  "use_web_search": false,
+  "web_search_query": "string",
+  "web_search_limit": 3,
+  "conversation_files": [
+    "string"
+  ],
+  "temperature": 0,
+  "max_tokens": 2220,
+  "conversation_id":3
+}

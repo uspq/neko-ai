@@ -3,9 +3,11 @@ from typing import List, Dict, Any, Optional
 
 from models.knowledge import FileUploadResponse, FileListResponse, FileDetailResponse, KnowledgeSearchRequest, KnowledgeSearchResponse
 from services.knowledge_service import knowledge_service
-from utils.logger import api_logger
+from utils.logger import get_logger
 
 router = APIRouter()
+
+api_logger = get_logger("api")
 
 @router.post("/upload", response_model=FileUploadResponse, summary="上传文件到知识库")
 async def upload_file(file: UploadFile = File(...)):

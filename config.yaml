@@ -10,7 +10,7 @@ api:
   # API请求超时时间（秒）
   timeout: 30
   # 是否开启API密钥校验
-  auth_enabled: true
+  auth_enabled: false
   # API请求速率限制（每分钟请求次数）
   rate_limit: 60
 
@@ -170,4 +170,31 @@ user:
   # 是否启用
   enabled: true
   # 创建时间
-  created_at: "2023-01-01 00:00:00" 
+  created_at: "2023-01-01 00:00:00"
+
+# 添加 SerpAPI 配置
+serpapi:
+  api_key: ""  # 您的 SerpAPI API 密钥
+  enabled: true  # 是否启用 SerpAPI
+
+# 网络搜索配置
+web_search:
+  # 是否启用网络搜索
+  enabled: true
+  # 默认搜索引擎 (bocha, google, serpapi)
+  default_engine: "bocha"
+  # 搜索结果数量
+  num_results: 5
+  # 博查搜索配置
+  bocha:
+    api_key: "sk-979dcdf9bc144b289d3370bdee35a6a0"
+    api_url: "https://api.bochaai.com/v1/web-search"
+    enabled: true
+  # Google搜索配置
+  google:
+    api_key: ""
+    cse_id: ""
+    enabled: false
+
+# 其他可能缺失的配置项
+# ... 

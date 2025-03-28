@@ -1,7 +1,7 @@
 from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime
 import os
-from openai import OpenAI
+from openai import OpenAI, AsyncOpenAI
 from pydantic import Field
 
 from core.config import settings
@@ -11,28 +11,28 @@ from services.memory_service import MemoryService
 from services.knowledge_service import knowledge_service
 from services.web_search_service import web_search_service
 from utils.text import calculate_tokens_and_cost
+from utils.rerank import rerank_results
 
 class ChatService:
     def __init__(self):
         """初始化聊天服务"""
-        self.client = OpenAI(
+        self.client = AsyncOpenAI(
             api_key=settings.API_KEY,
             base_url=settings.API_BASE_URL
         )
         
-    def get_chat_response(self,
-                          message: str,
-                          use_memory: bool = True,
-                          use_knowledge: bool = False,
-                          knowledge_query: Optional[str] = None,
-                          knowledge_limit: int = 3,
-                          use_web_search: bool = False,
-                          web_search_query: Optional[str] = None,
-                          web_search_limit: int = 3,
-                          conversation_files: Optional[List[str]] = None,
-                          temperature: Optional[float] = None,
-                          max_tokens: Optional[int] = None,
-                          conversation_id: Optional[int] = None) -> ChatResponse:
+    async def get_chat_response(self,
+                              message: str,
+                              use_memory: bool = True,
+                              use_knowledge: bool = False,
+                              knowledge_query: Optional[str] = None,
+                              knowledge_limit: int = 3,
+                              use_web_search: bool = False,
+                              web_search_query: Optional[str] = None,
+                              web_search_limit: int = 3,
+                              conversation_id: Optional[str] = None,
+                              temperature: Optional[float] = None,
+                              max_tokens: Optional[int] = None) -> ChatResponse:
         """获取聊天响应
         
         Args:
@@ -44,10 +44,9 @@ class ChatService:
             use_web_search: 是否使用网络搜索
             web_search_query: 网络搜索查询，如果为None则使用message
             web_search_limit: 网络搜索结果数量限制
-            conversation_files: 与当前对话关联的文件ID列表，仅在多对话模式下有效
+            conversation_id: 对话ID，用于关联记忆和历史消息
             temperature: 温度参数，控制随机性
             max_tokens: 最大生成token数，默认使用设置中的MODEL_MAX_TOKENS
-            conversation_id: 对话ID，用于关联记忆和历史消息
             
         Returns:
             ChatResponse: 聊天响应对象
@@ -136,26 +135,39 @@ class ChatService:
                     file_ids=file_ids
                 )
                 logger.info(f"知识库搜索结果: {len(knowledge_results)} 条")
-                
-            # 获取网络搜索结果
-            if use_web_search and (settings.WEB_SEARCH_ENABLED or web_search_service.is_available()):
-                # 确定查询文本
-                search_query = web_search_query if web_search_query else message
-                
-                # 执行网络搜索
-                web_search_docs = web_search_service.search_to_documents(
-                    query=search_query,
-                    num_results=web_search_limit
-                )
-                
-                # 将文档转换为字典格式
-                for doc in web_search_docs:
-                    web_search_results.append({
-                        "content": doc.page_content,
-                        "metadata": doc.metadata
-                    })
+            
+            # 如果启用了网络搜索
+            if use_web_search and web_search_service.is_available():
+                logger.info(f"执行网络搜索，查询: {web_search_query or message}")
+                try:
+                    # 执行搜索
+                    search_results = web_search_service.search(
+                        query=web_search_query or message,
+                        num_results=web_search_limit
+                    )
                     
-                logger.info(f"网络搜索结果: {len(web_search_results)} 条")
+                    if search_results:
+                        # 重排序搜索结果
+                        reranked_results = rerank_results(
+                            query=message,
+                            results=[r["snippet"] for r in search_results],
+                            top_k=min(web_search_limit, len(search_results))
+                        )
+                        
+                        # 构建搜索上下文
+                        search_context = "网络搜索结果:\n\n"
+                        for i, (score, result) in enumerate(reranked_results, 1):
+                            result_data = search_results[i-1]
+                            search_context += f"{i}. {result_data['title']}\n"
+                            search_context += f"   链接: {result_data['link']}\n"
+                            search_context += f"   相关度: {score:.2f}\n"
+                            search_context += f"   摘要: {result_data['snippet']}\n\n"
+                        
+                        context += f"\n{search_context}\n"
+                        web_search_results = search_results
+                        logger.info(f"添加了 {len(reranked_results)} 条搜索结果到上下文")
+                except Exception as e:
+                    logger.error(f"执行网络搜索时出错: {str(e)}")
             
             # 构建带有上下文的提示
             current_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -210,7 +222,7 @@ class ChatService:
             temp = temperature if temperature is not None else settings.MODEL_TEMPERATURE
             tokens = max_tokens if max_tokens is not None else settings.MODEL_MAX_TOKENS
             
-            response = self.client.chat.completions.create(
+            response = await self.client.chat.completions.create(
                 model=settings.MODEL_NAME,
                 messages=messages,
                 max_tokens=tokens,
@@ -224,13 +236,13 @@ class ChatService:
             full_response = response.choices[0].message.content
             
             # 计算token数和费用
-            input_tokens, output_tokens, cost = calculate_tokens_and_cost(
+            token_info = calculate_tokens_and_cost(
                 system_message + message, 
                 full_response
             )
             
             # 保存对话到记忆和数据库
-            timestamp = MemoryService.save_conversation(
+            timestamp = await MemoryService.save_conversation(
                 message, 
                 full_response, 
                 conversation_id
@@ -254,9 +266,9 @@ class ChatService:
                     timestamp=timestamp,
                     user_message=message,
                     ai_response=full_response,
-                    tokens_input=input_tokens,
-                    tokens_output=output_tokens,
-                    cost=cost,
+                    tokens_input=token_info.input_tokens,
+                    tokens_output=token_info.output_tokens,
+                    cost=token_info.total_cost,
                     metadata=metadata
                 )
                 
@@ -270,21 +282,21 @@ class ChatService:
             # 构建响应对象
             chat_response = ChatResponse(
                 message=full_response,
-                input_tokens=input_tokens,
-                output_tokens=output_tokens,
-                cost=cost,
+                input_tokens=token_info.input_tokens,
+                output_tokens=token_info.output_tokens,
+                cost=token_info.total_cost,
                 memories_used=memories_used,
                 knowledge_used=knowledge_results if use_knowledge else [],
                 web_search_used=web_search_results if use_web_search else [],
-                timestamp=timestamp,
+                timestamp=timestamp or datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 conversation_id=conversation_id
             )
             
-            logger.info(f"聊天响应成功，tokens: {input_tokens}(输入)/{output_tokens}(输出), 对话ID: {conversation_id or '默认'}")
+            logger.info(f"聊天响应成功，tokens: {token_info.input_tokens}(输入)/{token_info.output_tokens}(输出), 对话ID: {conversation_id or '默认'}")
             return chat_response
             
         except Exception as e:
-            logger.error(f"获取聊天响应失败: {str(e)}")
+            logger.error(f"获取聊天响应失败: {str(e)}", exc_info=True)
             raise
     
     def _read_file_content(self, file_path: str, default_content: str = "") -> str:
@@ -310,22 +322,17 @@ class ChatService:
             logger.error(f"读取{file_path}文件失败: {str(e)}")
             return default_content
     
-    def calculate_tokens(self, input_text: str, output_text: str) -> TokenCost:
-        """计算token数量和费用
-        
-        Args:
-            input_text: 输入文本
-            output_text: 输出文本
-            
-        Returns:
-            TokenCost: token计算和费用对象
-        """
-        input_tokens, output_tokens, total_cost = calculate_tokens_and_cost(input_text, output_text)
-        
-        return TokenCost(
-            input_tokens=input_tokens,
-            output_tokens=output_tokens,
-            input_cost=input_tokens * 0.000004,
-            output_cost=output_tokens * 0.000016,
-            total_cost=total_cost
-        ) 
+    async def process_message(self, user_message: str, conversation_id: Optional[str] = None, web_search: bool = False) -> ChatResponse:
+        """处理用户消息，生成回复"""
+        try:
+            return await self.get_chat_response(
+                message=user_message,
+                conversation_id=conversation_id,
+                use_web_search=web_search
+            )
+        except Exception as e:
+            logger.error(f"处理消息时出错: {str(e)}", exc_info=True)
+            raise
+
+# 创建全局聊天服务实例
+chat_service = ChatService() 

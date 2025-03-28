@@ -5,6 +5,94 @@ from typing import Dict, Any, Optional
 from pydantic import Field
 from pydantic_settings import BaseSettings
 
+# 配置文件路径
+CONFIG_FILE_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config.yaml")
+CONFIG_EXAMPLE_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config.yaml.example")
+
+class Config:
+    _instance = None
+    _config_data = {}
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super(Config, cls).__new__(cls)
+            cls._instance._load_config()
+        return cls._instance
+
+    def _load_config(self):
+        """从 config.yaml 加载配置"""
+        try:
+            if os.path.exists(CONFIG_FILE_PATH):
+                with open(CONFIG_FILE_PATH, 'r', encoding='utf-8') as f:
+                    self._config_data = yaml.safe_load(f) or {}
+            else:
+                # 如果配置文件不存在，尝试从示例配置创建
+                if os.path.exists(CONFIG_EXAMPLE_PATH):
+                    with open(CONFIG_EXAMPLE_PATH, 'r', encoding='utf-8') as f:
+                        self._config_data = yaml.safe_load(f) or {}
+                    # 保存为实际配置文件
+                    with open(CONFIG_FILE_PATH, 'w', encoding='utf-8') as f:
+                        yaml.dump(self._config_data, f, default_flow_style=False, allow_unicode=True)
+                else:
+                    self._config_data = {}
+                    print("警告: 未找到配置文件或示例配置文件")
+        except Exception as e:
+            print(f"加载配置文件时出错: {e}")
+            self._config_data = {}
+
+    def get(self, key: str, default: Any = None) -> Any:
+        """获取配置项，支持使用点号访问嵌套配置"""
+        if "." in key:
+            parts = key.split(".")
+            current = self._config_data
+            for part in parts:
+                if isinstance(current, dict) and part in current:
+                    current = current[part]
+                else:
+                    return default
+            return current
+        return self._config_data.get(key, default)
+
+    def set(self, key: str, value: Any) -> None:
+        """设置配置项，支持使用点号设置嵌套配置"""
+        if "." in key:
+            parts = key.split(".")
+            current = self._config_data
+            for i, part in enumerate(parts[:-1]):
+                if part not in current:
+                    current[part] = {}
+                current = current[part]
+            current[parts[-1]] = value
+        else:
+            self._config_data[key] = value
+
+    def save(self) -> bool:
+        """保存配置到文件"""
+        try:
+            with open(CONFIG_FILE_PATH, 'w', encoding='utf-8') as f:
+                yaml.dump(self._config_data, f, default_flow_style=False, allow_unicode=True)
+            return True
+        except Exception as e:
+            print(f"保存配置文件时出错: {e}")
+            return False
+
+    # 便捷方法，用于获取特定配置
+    def get_serpapi_config(self) -> Dict[str, Any]:
+        """获取 SerpAPI 配置"""
+        return {
+            "api_key": self.get("serpapi.api_key", ""),
+            "enabled": self.get("serpapi.enabled", False)
+        }
+
+    def get_web_search_config(self) -> Dict[str, Any]:
+        """获取网络搜索配置"""
+        return self.get("web_search", {})
+
+    # 添加其他便捷方法...
+
+# 创建全局配置实例
+config = Config()
+
 class Settings(BaseSettings):
     """应用配置类"""
     # API配置
@@ -21,6 +109,8 @@ class Settings(BaseSettings):
     MODEL_TOP_P: float = Field(0.9)
     MODEL_FREQUENCY_PENALTY: float = Field(0)
     MODEL_PRESENCE_PENALTY: float = Field(0)
+    MODEL_INPUT_PRICE_PER_1K: float = Field(0.001)  # 输入token价格，每1K tokens
+    MODEL_OUTPUT_PRICE_PER_1K: float = Field(0.002)  # 输出token价格，每1K tokens
     
     # 嵌入模型配置
     EMBEDDING_MODEL: str = Field("BAAI/bge-large-zh-v1.5")
@@ -182,6 +272,10 @@ class Settings(BaseSettings):
                 self.MODEL_FREQUENCY_PENALTY = model_config["frequency_penalty"]
             if "presence_penalty" in model_config:
                 self.MODEL_PRESENCE_PENALTY = model_config["presence_penalty"]
+            if "input_price_per_1k" in model_config:
+                self.MODEL_INPUT_PRICE_PER_1K = model_config["input_price_per_1k"]
+            if "output_price_per_1k" in model_config:
+                self.MODEL_OUTPUT_PRICE_PER_1K = model_config["output_price_per_1k"]
         
         if "embedding" in config:
             embedding_config = config["embedding"]

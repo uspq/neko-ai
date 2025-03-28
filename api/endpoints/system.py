@@ -7,7 +7,8 @@ import time
 from datetime import datetime
 
 from core.config import settings
-from utils.logger import api_logger
+from utils.logger import get_logger
+api_logger = get_logger("api")
 
 router = APIRouter()
 

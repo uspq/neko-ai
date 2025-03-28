@@ -8,9 +8,11 @@ from models.conversation import (
 )
 from models.memory import MemoryClearRequest
 from services.conversation_service import conversation_service
-from utils.logger import api_logger
+from utils.logger import get_logger
 
 router = APIRouter()
+
+api_logger = get_logger("api")
 
 @router.post("", response_model=Conversation, summary="创建新对话")
 async def create_conversation(request: ConversationCreate):

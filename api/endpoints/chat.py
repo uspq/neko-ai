@@ -5,10 +5,13 @@ from models.chat import ChatRequest, ChatResponse, TokenCost
 from models.conversation import ConversationChatRequest
 from services.chat_service import ChatService
 from services.conversation_service import conversation_service
-from utils.logger import api_logger
+from utils.logger import get_logger
+from utils.text import calculate_tokens_and_cost
 
 router = APIRouter()
 chat_service = ChatService()
+
+api_logger = get_logger("api")
 
 @router.post("/chat", response_model=ChatResponse, summary="获取聊天回复")
 async def chat(request: ChatRequest):
@@ -35,7 +38,7 @@ async def chat(request: ChatRequest):
             if not conversation:
                 raise HTTPException(status_code=404, detail=f"对话 {request.conversation_id} 不存在")
         
-        response = chat_service.get_chat_response(
+        response = await chat_service.get_chat_response(
             message=request.message,
             use_memory=request.use_memory,
             use_knowledge=request.use_knowledge,
@@ -104,7 +107,7 @@ async def conversation_chat(request: ConversationChatRequest):
             conversation_files = conversation.get("files")
         
         # 调用聊天服务
-        response = chat_service.get_chat_response(
+        response = await chat_service.get_chat_response(
             message=request.message,
             use_memory=use_memory,
             use_knowledge=use_knowledge,
@@ -137,7 +140,7 @@ async def calculate_tokens(input_text: str, output_text: str):
     返回token数量和费用信息
     """
     try:
-        token_cost = chat_service.calculate_tokens(input_text, output_text)
+        token_cost = calculate_tokens_and_cost(input_text, output_text)
         return token_cost
         
     except Exception as e:

@@ -3,7 +3,9 @@ from typing import List, Dict, Any, Optional
 
 from models.memory import MemoryCreate, MemoryResponse, MemorySearchRequest, MemorySearchResponse, MemoryStatistics
 from services.memory_service import MemoryService
-from utils.logger import api_logger
+from utils.logger import get_logger
+
+api_logger = get_logger("api")
 
 router = APIRouter()
 
