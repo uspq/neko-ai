@@ -7,7 +7,7 @@ response = openai.chat.completions.create(
     model="neko-model",
     messages=[
         {"role": "system", "content": "你是一个有用的助手。"},
-        {"role": "user", "content": "你是谁？"}
+        {"role": "user", "content": "hi"}
     ],
     temperature=0.7
 )

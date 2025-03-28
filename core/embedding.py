@@ -68,8 +68,8 @@ def get_embedding_from_api(text: str) -> np.ndarray:
         # 检查响应状态
         if response.status_code != 200:
             # 处理文本过长错误 (413)
-            if response.status_code == 413 and "must have less than 512 tokens" in response.text:
-                logger.warning("文本超过512 tokens限制，尝试进一步截断...")
+            if response.status_code == 413 and "must have less than max tokens" in response.text:
+                logger.warning("文本超过最大tokens限制，尝试进一步截断...")
                 # 截断文本长度为原来的一半
                 half_length = len(text) // 2
                 if half_length < 10:  # 如果文本已经非常短，就不再处理
