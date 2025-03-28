@@ -18,9 +18,13 @@ eggs/
 .eggs/
 lib/
 lib64/
+*.pyc
 parts/
 sdist/
 var/
+logs/*
+api.log
+neko.log
 wheels/
 share/python-wheels/
 *.egg-info/

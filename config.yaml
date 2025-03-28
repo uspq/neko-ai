@@ -119,9 +119,9 @@ app:
   # 应用名称
   name: "Neko API"
   # 应用版本
-  version: "1.0.0"
+  version: "1.1.0"
   # 应用描述
-  description: "持久记忆AI助手API"
+  description: "Neok AI助手API"
   # 是否开启调试模式
   debug: false
   # 服务器主机地址

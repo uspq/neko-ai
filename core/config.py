@@ -73,8 +73,8 @@ class Settings(BaseSettings):
     
     # 应用配置
     APP_NAME: str = Field("Neko API")
-    APP_VERSION: str = Field("1.0.0")
-    APP_DESCRIPTION: str = Field("持久记忆AI助手API")
+    APP_VERSION: str = Field("1.1.0")
+    APP_DESCRIPTION: str = Field("Neok AI助手API")
     DEBUG: bool = Field(False)
     APP_HOST: str = Field("localhost")
     APP_PORT: int = Field(9999)
