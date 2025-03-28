@@ -5,6 +5,7 @@ import shutil
 import pickle
 import json
 import numpy as np
+import time
 
 from core.config import settings
 from utils.logger import logger
@@ -29,12 +30,28 @@ class MemoryService:
             str: 保存的记忆时间戳
         """
         try:
+            # 记录开始时间
+            start_time = time.time()
+            logger.info(f"开始保存对话到记忆，对话ID: {conversation_id or '全局'}")
+            
             # 如果指定了对话ID，先检查该对话是否存在
             if conversation_id is not None:
                 conversation = mysql_db.get_conversation(conversation_id)
                 if not conversation:
                     logger.warning(f"保存记忆失败：对话ID {conversation_id} 不存在，将作为全局记忆保存")
                     conversation_id = None
+            
+            # 处理过长的文本，防止超出 API 限制
+            max_length = 300  # 安全的长度限制，考虑到中文字符约为1.5个token
+            
+            # 如果用户消息或AI回复过长，进行截断
+            if len(user_message) > max_length:
+                logger.warning(f"用户消息过长 ({len(user_message)} 字符)，截断至 {max_length} 字符")
+                user_message = user_message[:max_length] + "..."
+                
+            if len(ai_response) > max_length:
+                logger.warning(f"AI回复过长 ({len(ai_response)} 字符)，截断至 {max_length} 字符")
+                ai_response = ai_response[:max_length] + "..."
             
             # 构建完整文本用于计算嵌入向量
             full_text = f"用户: {user_message}\n助手: {ai_response}"
@@ -57,7 +74,9 @@ class MemoryService:
             # 保存到FAISS
             memory_store.add_text(full_text, embedding, timestamp, conversation_id)
             
-            logger.info(f"对话已保存，时间戳: {timestamp}, 对话ID: {conversation_id or '全局'}")
+            # 记录耗时
+            elapsed_time = time.time() - start_time
+            logger.info(f"对话已保存，时间戳: {timestamp}, 对话ID: {conversation_id or '全局'}, 耗时: {elapsed_time:.2f}秒")
             return timestamp
             
         except Exception as e:
@@ -77,6 +96,10 @@ class MemoryService:
             Tuple[str, List[Dict]]: (格式化的上下文字符串, 使用的记忆列表)
         """
         try:
+            # 记录开始时间
+            start_time = time.time()
+            logger.info(f"开始获取上下文，查询: {query[:30]}..., 对话ID: {conversation_id or '全局'}")
+            
             context_parts = []
             used_memories = []
             
@@ -166,6 +189,10 @@ class MemoryService:
             # 如果仍然没有足够的上下文，但不想要空上下文，可以添加一条默认消息
             if not context_parts:
                 logger.info("没有找到任何相关上下文")
+            
+            # 记录耗时
+            elapsed_time = time.time() - start_time
+            logger.info(f"上下文获取完成，找到 {len(used_memories)} 条记忆，耗时: {elapsed_time:.2f}秒")
             
             return "\n".join(context_parts), used_memories
             

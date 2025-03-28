@@ -32,9 +32,9 @@ model:
 # 嵌入模型配置
 embedding:
   # 使用的嵌入模型
-  model: "BAAI/bge-large-zh-v1.5"
+  model: "BAAI/bge-m3"
   # 超时时间（秒）
-  timeout: 30
+  timeout: 100
   # 向量维度
   dimension: 1024
 

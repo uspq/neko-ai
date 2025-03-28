@@ -1,5 +1,6 @@
 import numpy as np
 import requests
+import time
 from typing import List, Dict, Any, Union
 from core.config import settings
 from utils.logger import logger
@@ -11,24 +12,36 @@ def get_embedding(text: str) -> np.ndarray:
     """获取文本嵌入向量，直接使用API"""
     if not text or not isinstance(text, str):
         raise ValueError("输入文本不能为空且必须是字符串类型")
-        
+    
+    # 记录开始时间
+    start_time = time.time()
+    
     # 清理和预处理文本
     text = text.strip()
     if not text:
         raise ValueError("输入文本不能全为空白字符")
     
     # 检查文本长度，如果过长则截断
-    # 中文每个字约1.5个token，8192 tokens约等于5000个字符
-    max_chars = 5000
+    # 中文每个字约1.5个token，512 tokens约等于340个字符
+    max_chars = 340
     if len(text) > max_chars:
         logger.warning(f"文本过长 ({len(text)} 字符)，截断至 {max_chars} 字符")
         text = text[:max_chars]
     
     # 直接使用API获取嵌入向量
-    return get_embedding_from_api(text)
+    embedding = get_embedding_from_api(text)
+    
+    # 记录耗时
+    elapsed_time = time.time() - start_time
+    logger.info(f"获取嵌入向量完成，文本长度: {len(text)} 字符，耗时: {elapsed_time:.2f}秒")
+    
+    return embedding
 
 def get_embedding_from_api(text: str) -> np.ndarray:
     """使用 API 获取文本嵌入向量"""
+    # 记录开始时间
+    start_time = time.time()
+    
     # 准备API请求
     headers = {
         "Authorization": f"Bearer {settings.API_KEY}",
@@ -44,6 +57,7 @@ def get_embedding_from_api(text: str) -> np.ndarray:
     
     try:
         # 发送请求
+        logger.info(f"开始请求embedding API，文本长度: {len(text)} 字符")
         response = requests.post(
             f"{settings.API_BASE_URL}/embeddings",
             headers=headers,
@@ -53,9 +67,22 @@ def get_embedding_from_api(text: str) -> np.ndarray:
         
         # 检查响应状态
         if response.status_code != 200:
-            error_msg = f"API请求失败 (状态码: {response.status_code}): {response.text}"
-            logger.error(error_msg)
-            raise Exception(error_msg)
+            # 处理文本过长错误 (413)
+            if response.status_code == 413 and "must have less than 512 tokens" in response.text:
+                logger.warning("文本超过512 tokens限制，尝试进一步截断...")
+                # 截断文本长度为原来的一半
+                half_length = len(text) // 2
+                if half_length < 10:  # 如果文本已经非常短，就不再处理
+                    error_msg = f"API请求失败 (状态码: {response.status_code}): {response.text}"
+                    logger.error(error_msg)
+                    raise Exception(error_msg)
+                
+                logger.info(f"将文本从 {len(text)} 字符截断到 {half_length} 字符")
+                return get_embedding_from_api(text[:half_length])
+            else:
+                error_msg = f"API请求失败 (状态码: {response.status_code}): {response.text}"
+                logger.error(error_msg)
+                raise Exception(error_msg)
         
         # 解析响应
         result = response.json()
@@ -70,11 +97,16 @@ def get_embedding_from_api(text: str) -> np.ndarray:
         # 获取embedding
         embedding = result['data'][0]['embedding']
         
+        # 记录耗时
+        elapsed_time = time.time() - start_time
+        logger.info(f"embedding API请求完成，耗时: {elapsed_time:.2f}秒")
+        
         # 转换为numpy数组
         return np.array(embedding, dtype=np.float32)
         
     except requests.exceptions.RequestException as e:
-        logger.error(f"API请求失败: {str(e)}")
+        elapsed_time = time.time() - start_time
+        logger.error(f"API请求失败: {str(e)}，耗时: {elapsed_time:.2f}秒")
         raise Exception(f"获取embedding失败: {str(e)}")
         
     except (KeyError, IndexError, ValueError) as e:

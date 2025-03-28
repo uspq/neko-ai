@@ -69,6 +69,10 @@ async def add_process_time_header(request: Request, call_next):
 # 注册API路由
 app.include_router(api_router, prefix="/api")
 
+# 直接注册 v1 路由以兼容 OpenAI API 格式
+from api.routes import v1
+app.include_router(v1.router)
+
 # 根路由
 @app.get("/")
 async def root():

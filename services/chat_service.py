@@ -18,8 +18,10 @@ class ChatService:
         """初始化聊天服务"""
         self.client = AsyncOpenAI(
             api_key=settings.API_KEY,
-            base_url=settings.API_BASE_URL
+            base_url=settings.API_BASE_URL,
+            timeout=settings.API_TIMEOUT  # 使用配置中的超时时间
         )
+        logger.info(f"ChatService初始化成功，API基础URL: {settings.API_BASE_URL}, 超时设置: {settings.API_TIMEOUT}秒")
         
     async def get_chat_response(self,
                               message: str,
@@ -33,7 +35,9 @@ class ChatService:
                               conversation_id: Optional[str] = None,
                               temperature: Optional[float] = None,
                               max_tokens: Optional[int] = None,
-                              conversation_files: Optional[List[str]] = None) -> ChatResponse:
+                              conversation_files: Optional[List[str]] = None,
+                              system_prompt: Optional[str] = None,
+                              conversation_context: Optional[List[Dict[str, str]]] = None) -> ChatResponse:
         """获取聊天响应
         
         Args:
@@ -49,6 +53,8 @@ class ChatService:
             temperature: 温度参数，控制随机性
             max_tokens: 最大生成token数，默认使用设置中的MODEL_MAX_TOKENS
             conversation_files: 对话关联的文件ID列表
+            system_prompt: 可选的系统提示，覆盖默认提示
+            conversation_context: 可选的对话上下文列表，用于 OpenAI 兼容 API
             
         Returns:
             ChatResponse: 聊天响应对象
@@ -198,19 +204,35 @@ class ChatService:
             # 添加对话ID信息
             conversation_info = f"对话ID: {conversation_id}" if conversation_id else "这是一个全局对话"
             
-            system_message = (
-                base_md + "\n" +  # 在 prompt 的最前面添加 basemd 内容
-                "1.你需要严格遵守的人设:" + prompt_md + "\n"
-                +
-                f"2.你要扮演人设，根据人设回答问题，下面你与用户的对话记录，当前时间是{current_date}，{conversation_info}，读取然后根据对话内容和人设，再最后回复用户User问题：\n" + context
-                + knowledge_content
-                + web_search_content
-            )
+            # 使用提供的系统提示或生成默认提示
+            if system_prompt is not None:
+                # 使用传入的系统提示
+                system_message = system_prompt
+            else:
+                # 生成默认系统提示
+                system_message = (
+                    base_md + "\n" +  # 在 prompt 的最前面添加 basemd 内容
+                    "1.你需要严格遵守的人设:" + prompt_md + "\n"
+                    +
+                    f"2.你要扮演人设，根据人设回答问题，下面你与用户的对话记录，当前时间是{current_date}，{conversation_info}，读取然后根据对话内容和人设，再最后回复用户User问题：\n" + context
+                    + knowledge_content
+                    + web_search_content
+                )
             
-            messages = [
-                {"role": "system", "content": system_message},
-                {"role": "user", "content": message},
-            ]
+            # 构建消息列表
+            if conversation_context is not None:
+                # 使用提供的对话上下文
+                messages = conversation_context
+                
+                # 确保最后一条是用户消息
+                if not messages or messages[-1]["role"] != "user":
+                    messages.append({"role": "user", "content": message})
+            else:
+                # 使用默认消息结构
+                messages = [
+                    {"role": "system", "content": system_message},
+                    {"role": "user", "content": message},
+                ]
             
             # 记录完整prompt
             logger.info("完整Prompt:")
@@ -224,6 +246,10 @@ class ChatService:
             temp = temperature if temperature is not None else settings.MODEL_TEMPERATURE
             tokens = max_tokens if max_tokens is not None else settings.MODEL_MAX_TOKENS
             
+            # 记录API调用开始时间
+            api_start_time = datetime.now()
+            logger.info(f"开始调用外部API，时间: {api_start_time.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]}")
+            
             response = await self.client.chat.completions.create(
                 model=settings.MODEL_NAME,
                 messages=messages,
@@ -233,6 +259,11 @@ class ChatService:
                 frequency_penalty=settings.MODEL_FREQUENCY_PENALTY,
                 presence_penalty=settings.MODEL_PRESENCE_PENALTY
             )
+            
+            # 记录API调用结束时间和耗时
+            api_end_time = datetime.now()
+            api_duration = (api_end_time - api_start_time).total_seconds()
+            logger.info(f"外部API调用完成，耗时: {api_duration:.2f}秒")
             
             # 获取完整响应
             full_response = response.choices[0].message.content

@@ -505,7 +505,7 @@ MIT License
 
 - 项目维护者：hllqkb
 - 电子邮件：[hllqkb@gmail.com](mailto:hllqkb@gmail.com)
-- 项目主页：https://github.com/hllqkb/neko-ai-app
+- 项目主页：[uspq/neko-ai](https://github.com/uspq/neko-ai)
 
 ------
 
