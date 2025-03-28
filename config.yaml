@@ -204,5 +204,17 @@ web_search:
     cse_id: ""
     enabled: false
 
+# ElevenLabs TTS配置
+tts:
+  enabled: true
+  api_key: "sk_9c7d46d2da3379f7755463ad3667888b6af86db2b06c555b"  # 您的 ElevenLabs API 密钥
+  model_id: "eleven_multilingual_v2"  # 默认模型ID
+  voice_id: "21m00Tcm4TlvDq8ikWAM"  # 默认语音ID
+  optimize_streaming_latency: 0  # 流式传输延迟优化级别(0-4)
+  stability: 0.5  # 语音稳定性(0-1)
+  similarity_boost: 0.75  # 语音相似度提升(0-1)
+  style: 0.0  # 风格强度(0-1)
+  use_speaker_boost: true  # 是否使用说话者增强
+
 # 其他可能缺失的配置项
 # ... 

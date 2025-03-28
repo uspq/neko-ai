@@ -1,6 +1,6 @@
 # Neko-AI
 
-一个具有持久记忆功能的智能AI助手API服务，专注于RAG的底层实现，抽象出多种相关接口，致力于实现一个完整完善的AI AGENT后端服务
+一个具有持久记忆功能的智能AI助手API服务，专注于RAG的底层实现，抽象出多种RAG相关接口，致力于实现一个完整完善的AI AGENT后端服务
 
 ## 功能特点
 
@@ -10,10 +10,15 @@
 - 🌐 **网页搜索功能**：支持使用DuckDuckGo、博查等搜索引擎执行实时网络搜索，辅助回答问题
 - 📚 **知识库管理**：支持上传和管理自定义知识文档
 - 💬 **多对话管理**：支持创建和管理多个独立对话，每个对话有自己的上下文环境
+- 🎙️ **文本转语音**：集成 ElevenLabs 的高质量 TTS 服务，支持多种语音模型和实时流式生成
 - 🚀 **高性能API**：基于FastAPI的高性能API服务
 - 🔒 **安全认证**：API密钥验证机制保障服务安全
 - 📝 **灵活配置**：通过YAML/JSON配置文件灵活配置服务参数
 - 😘 **多种人设**：支持PROMT多种人设设置
+
+
+
+![](https://cdn.hllqk.cn/2025/03/efbc2915b860d5f1ccfae0198bf735bb.png)
 
 ## RAG检索增强生成实现细节
 
@@ -167,45 +172,172 @@ RAG的核心是有效地构建和优化上下文信息，Neko-AI采用多层次�
 ## 环境要求
 
 - Python 3.10+
+- PIP
 - Neo4j 4.4+
 - MySQL 5.7+
 - 足够的存储空间用于向量数据库(GPU优先CPU)
 
 ## 快速开始
-mac测试运行脚本:
-可以运行这个开发环境
-/opt/anaconda3/bin/python /Users/hllqk/giyhub/neko-ai/run.py
 
-1. 克隆仓库
+### 1. 克隆仓库
 ```bash
 git clone https://github.com/yourusername/Persistent-memory-Neko.git
 cd Persistent-memory-Neko
 ```
 
-2. 创建虚拟环境并安装依赖
+### 2. 创建虚拟环境并安装依赖
 ```bash
 python -m venv .venv
 source .venv/bin/activate  # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-/Users/hllqk/neko-ai-app/.venv/bin/python /Users/hllqk/neko-ai-app/main.py
 ```
 
-3. 配置Neo4j数据库
-   - 安装并启动Neo4j服务
-   - 创建数据库并设置用户名密码
-   - 在配置文件中更新数据库连接信息
+### 3. 配置数据库
 
-4. 配置API服务
-   - 复制`config.yaml.example`为`config.yaml`
-   - 根据需要修改配置参数
+#### 3.1 MySQL数据库配置
+1. 安装MySQL（如果尚未安装）
+   ```bash
+   # Ubuntu/Debian
+   sudo apt-get install mysql-server mysql-client
+   
+   # CentOS/RHEL
+   sudo yum install mysql-server mysql-client
+   
+   # Windows
+   # 从官网下载并安装MySQL: https://dev.mysql.com/downloads/installer/
+   ```
 
-5. 启动服务
+2. 启动MySQL服务
+   ```bash
+   # Linux
+   sudo systemctl start mysql
+   
+   # Windows
+   net start mysql
+   ```
+
+3. 创建数据库和用户
+   ```sql
+   mysql -u root -p
+   
+   CREATE DATABASE neko_ai;
+   CREATE USER 'neko_user'@'localhost' IDENTIFIED BY 'your_password';
+   GRANT ALL PRIVILEGES ON neko_ai.* TO 'neko_user'@'localhost';
+   FLUSH PRIVILEGES;
+   ```
+
+#### 3.2 Neo4j数据库配置
+1. 安装Neo4j（如果尚未安装）
+   - 从[Neo4j官网](https://neo4j.com/download/)下载并安装Neo4j Community Edition
+   - 或使用包管理器安装：
+     ```bash
+     # Ubuntu/Debian
+     sudo apt-get install neo4j
+     
+     # Windows
+     # 使用官方安装包安装
+     ```
+
+2. 启动Neo4j服务
+   ```bash
+   # Linux
+   sudo systemctl start neo4j
+   
+   # Windows
+   neo4j.bat start
+   ```
+
+3. 设置Neo4j密码
+   ```bash
+   # 访问 http://localhost:7474
+   # 默认用户名: neo4j
+   # 默认密码: neo4j
+   # 首次登录后需要修改密码
+   ```
+
+### 4. 配置文件设置
+
+1. 复制配置文件模板
+   ```bash
+   cp config.yaml.example config.yaml
+   ```
+
+2. 修改配置文件（config.yaml）
+
+### 5. 验证配置
+
+1. 检查MySQL连接
+   ```bash
+   mysql -u neko_user -p neko_ai
+   # 输入密码后应该能成功连接到数据库
+   ```
+
+2. 检查Neo4j连接
+   ```bash
+   # 访问 http://localhost:7474
+   # 使用配置的用户名和密码登录
+   ```
+
+### 6. 启动服务
 ```bash
 python run.py
 ```
 
-6. 访问API文档
-   - 在浏览器中打开 http://localhost:9999/docs
+### 7. 访问API文档
+- 在浏览器中打开 http://localhost:9999/docs
+- 使用配置的API密钥进行认证
+
+### 常见问题
+
+1. **MySQL连接错误**
+   - 检查MySQL服务是否正在运行
+   - 验证用户名和密码是否正确
+   - 确认数据库是否已创建
+   - 检查防火墙设置是否允许连接
+
+2. **Neo4j连接错误**
+   - 确保Neo4j服务正在运行
+   - 验证bolt端口(7687)是否可访问
+   - 检查用户名和密码是否正确
+   - 确认Neo4j配置允许远程连接
+
+3. **配置文件错误**
+   - 确保config.yaml格式正确（注意YAML缩进）
+   - 检查所有必需的配置项是否都已填写
+   - 验证API密钥和数据库凭据是否正确
+
+4. **日志中文显示乱码**
+   - **Windows环境**：
+     ```bash
+     # CMD中执行
+     chcp 65001
+     # 或在代码中设置
+     import sys
+     sys.stdout.reconfigure(encoding='utf-8')
+     ```
+   - **修改日志配置**：
+     ```python
+     # 在utils/logger.py中确保编码设置正确
+     logging.basicConfig(
+         filename='logs/app.log',
+         encoding='utf-8',  # 添加此行
+         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+     )
+     ```
+   - **控制台输出**：
+     ```python
+     # 添加控制台处理器时指定编码
+     console_handler = logging.StreamHandler(sys.stdout)
+     console_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s', encoding='utf-8'))
+     ```
+   - **文件系统编码**：
+     - Windows: 确保系统区域设置为UTF-8
+     - Linux/Mac: 确保LANG环境变量设置正确
+       ```bash
+       export LANG=zh_CN.UTF-8
+       ```
+
+如果遇到其他问题，请查看日志文件（logs目录）以获取详细错误信息或者前往ISSUE提交问题。
 
 ## 配置说明
 
@@ -270,6 +402,17 @@ web_search:
   enable_by_default: false  # 默认是否开启网页搜索功能
 ```
 
+### 文本转语音设置
+```yaml
+tts:
+  enabled: true
+  api_key: "your-api-key"  # ElevenLabs API密钥
+  model_id: "eleven_multilingual_v2"  # 模型ID
+  voice_id: "21m00Tcm4TlvDq8ikWAM"  # 语音ID
+  stability: 0.5  # 语音稳定性(0-1)
+  similarity_boost: 0.75  # 语音相似度提升(0-1)
+```
+
 详细配置项请参考`config.yaml.example`中的注释说明。
 
 ## 项目结构
@@ -280,6 +423,7 @@ web_search:
 │   ├── endpoints/      # 具体端点实现
 │   │   ├── chat.py     # 聊天相关API
 │   │   ├── memory.py   # 记忆相关API
+│   │   ├── tts.py      # 文本转语音API
 │   │   └── system.py   # 系统相关API
 │   └── router.py       # 路由注册
 ├── core/               # 核心功能
@@ -293,6 +437,7 @@ web_search:
 │   └── memory.py       # 记忆相关模型
 ├── services/           # 业务服务
 │   ├── chat_service.py # 聊天服务
+│   ├── tts_service.py  # 文本转语音服务
 │   └── memory_service.py # 记忆服务
 ├── utils/              # 工具函数
 │   ├── logger.py       # 日志工具
@@ -326,73 +471,29 @@ web_search:
 3. 在`api/router.py`中注册新的路由
 
 例如：
-```python
-# api/endpoints/new_feature.py
-from fastapi import APIRouter
-
-router = APIRouter()
-
-@router.get("/example", summary="示例端点")
-async def example_endpoint():
-    return {"message": "这是一个示例端点"}
-
-# api/router.py
-from api.endpoints import new_feature
-
-api_router.include_router(new_feature.router, prefix="/new_feature", tags=["新功能"])
 ```
 
-### 添加新的记忆存储方式
+## 文本转语音功能
 
-1. 在`db/`目录下创建新的存储实现
-2. 在`core/memory_store.py`中添加相应的存储适配器
-3. 在配置文件中添加相应的配置选项
+本项目集成了 ElevenLabs 的文本转语音(TTS)功能，支持以下特性：
 
-### 运行测试
+- 支持多种语音模型和声音
+- 支持同步和流式语音生成
+- 可自定义语音参数（稳定性、相似度等）
 
-```bash
-# 运行所有测试
-pytest
+### 配置说明
 
-# 运行特定模块测试
-pytest tests/test_memory_store.py
+在 `config.yaml` 中配置 ElevenLabs 相关参数：
 
-# 运行测试并生成覆盖率报告
-pytest --cov=app
+```yaml
+tts:
+  enabled: true
+  api_key: "your-api-key"  # ElevenLabs API密钥
+  model_id: "eleven_multilingual_v2"  # 模型ID
+  voice_id: "21m00Tcm4TlvDq8ikWAM"  # 语音ID
+  stability: 0.5  # 语音稳定性(0-1)
+  similarity_boost: 0.75  # 语音相似度提升(0-1)
 ```
-
-## 贡献指南
-
-我们欢迎任何形式的贡献，包括但不限于：
-
-- 报告问题或提出建议
-- 改进文档
-- 提交代码修复或新功能
-
-贡献步骤：
-
-1. Fork 本仓库
-2. 创建你的特性分支 (`git checkout -b feature/amazing-feature`)
-3. 提交你的更改 (`git commit -m 'Add some amazing feature'`)
-4. 推送到分支 (`git push origin feature/amazing-feature`)
-5. 创建一个 Pull Request
-
-## 常见问题
-
-### Q: 如何更改服务端口？
-A: 在配置文件中修改 `api.port` 值。
-
-### Q: 如何备份全部记忆数据？
-A: 使用系统API的备份功能 `POST /api/system/backup`，或直接复制 Neo4j 数据库和 FAISS 索引文件。
-
-### Q: 能否使用其他向量数据库代替 FAISS？
-A: 可以，你可以实现自己的向量存储适配器在 `db/` 目录中。
-
-### Q: 如何启用网页搜索功能？
-A: 首先在配置文件`config.yaml`中设置网页搜索相关配置，然后在API请求中添加`"use_web_search": true`参数。详细说明请参考[WEB_SEARCH_DOCUMENTATION.md](WEB_SEARCH_DOCUMENTATION.md)。
-
-### Q: 为什么设置了`use_web_search`为true但没有执行网页搜索？
-A: 请检查配置文件中的搜索引擎设置是否正确，并确保在请求中明确设置了`"use_web_search": true`。此外，确保您的问题适合通过网页搜索获取答案。
 
 ## 许可证
 
@@ -400,22 +501,16 @@ MIT License
 
 ## 联系方式
 
+
+
 - 项目维护者：hllqkb
-- 电子邮件：hllqkb@gmail.com
+- 电子邮件：[hllqkb@gmail.com](mailto:hllqkb@gmail.com)
 - 项目主页：https://github.com/hllqkb/neko-ai-app
 
----
+------
+
+
 
 <p align="center">
 Made with ❤️ for uspq
 </p>
-
-
-```bash
-python run.py
-```
-or 
-```bash
-cd /Users/hllqk/Persistent-memory-Neko && .venv/bin/python app/run.py
-```
-

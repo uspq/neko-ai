@@ -41,7 +41,8 @@ if config.get("logging.file", True):
     main_handler = RotatingFileHandler(
         main_log_path,
         maxBytes=config.get("logging.max_size", 10) * 1024 * 1024,  # 默认10MB
-        backupCount=config.get("logging.backup_count", 5)
+        backupCount=config.get("logging.backup_count", 5),
+        encoding='utf-8'
     )
     main_handler.setFormatter(formatter)
     logger.addHandler(main_handler)
@@ -51,7 +52,8 @@ if config.get("logging.file", True):
     api_handler = RotatingFileHandler(
         api_log_path,
         maxBytes=config.get("logging.max_size", 10) * 1024 * 1024,
-        backupCount=config.get("logging.backup_count", 5)
+        backupCount=config.get("logging.backup_count", 5),
+        encoding='utf-8'
     )
     api_handler.setFormatter(formatter)
     
@@ -69,7 +71,8 @@ if config.get("logging.file", True):
     search_handler = RotatingFileHandler(
         search_log_path,
         maxBytes=config.get("logging.max_size", 10) * 1024 * 1024,
-        backupCount=config.get("logging.backup_count", 5)
+        backupCount=config.get("logging.backup_count", 5),
+        encoding='utf-8'
     )
     search_handler.setFormatter(formatter)
     

@@ -35,3 +35,4 @@ bs4
 sentence-transformers
 google-api-python-client
 google-search-results
+elevenlabs

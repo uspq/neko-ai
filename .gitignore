@@ -9,6 +9,7 @@ logs/*
 knowledge/*
 faiss_index.pkl
 knowledge_index.pkl
+__pycache__/
 *.pyc
 # Distribution / packaging
 .Python
