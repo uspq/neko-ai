@@ -209,16 +209,19 @@ class ChatService:
                 # 使用传入的系统提示
                 system_message = system_prompt
             else:
+                
                 # 生成默认系统提示
-                system_message = (
-                    base_md + "\n" +  # 在 prompt 的最前面添加 basemd 内容
-                    "1.你需要严格遵守的人设:" + prompt_md + "\n"
-                    +
-                    f"2.你要扮演人设，根据人设回答问题，下面你与用户的对话记录，当前时间是{current_date}，{conversation_info}，读取然后根据对话内容和人设，再最后回复用户User问题：\n" + context
+                system_message_parts = []
+                if base_md:
+                    system_message_parts.append(base_md)
+                if prompt_md:
+                    system_message_parts.append("1.你需要严格遵守的人设:" + prompt_md+"2.你要扮演人设，根据人设,")
+                system_message_parts.append(
+                    f"你要回答用户问题，下面你与用户的对话记录，当前时间是{current_date}，{conversation_info}，读取然后根据对话内容和人设，再最后回复用户User问题：\n" + context
                     + knowledge_content
                     + web_search_content
                 )
-            
+                system_message = "\n".join(system_message_parts)
             # 构建消息列表
             if conversation_context is not None:
                 # 使用提供的对话上下文
