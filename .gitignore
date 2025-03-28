@@ -5,9 +5,11 @@ __pycache__/
 logs/*
 # C extensions
 *.so
+**/__pycache__
 knowledge/*
 faiss_index.pkl
 knowledge_index.pkl
+*.pyc
 # Distribution / packaging
 .Python
 build/

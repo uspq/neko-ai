@@ -11,6 +11,7 @@ scikit-learn
 jieba
 requests
 jinja2
+duckduckgo-search
 python-multipart
 openai
 tiktoken
