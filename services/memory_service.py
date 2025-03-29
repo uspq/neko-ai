@@ -792,10 +792,10 @@ class MemoryService:
 
     @staticmethod
     def _rerank_memories(query: str, memories: List[Dict[str, Any]], top_n: int = None) -> List[Dict[str, Any]]:
-        """对检索到的记忆进行重排序，提高上下文相关性
+        """对记忆进行重排序，以优化检索结果的顺序
         
         Args:
-            query: 用户查询
+            query: 搜索查询
             memories: 检索到的记忆列表
             top_n: 返回的最大记忆数量，默认返回所有记忆
             
@@ -803,6 +803,7 @@ class MemoryService:
             List[Dict[str, Any]]: 重排序后的记忆列表
         """
         if not memories:
+            logger.info("没有记忆可供重排序，返回空列表")
             return []
             
         if top_n is None:
@@ -823,6 +824,7 @@ class MemoryService:
                 documents.append(doc_text)
                 
             # 调用重排序API
+            from utils.rerank import rerank_documents
             rerank_results = rerank_documents(query, documents, top_n=top_n)
             
             if not rerank_results:
@@ -836,21 +838,13 @@ class MemoryService:
                 if 0 <= idx < len(memories):
                     memory = memories[idx].copy()  # 复制以避免修改原始记忆
                     memory["relevance_score"] = result.get("relevance_score", 0.0)
-                    memory["source_order"] = idx  # 保存原始顺序
                     memory["reranked"] = True
                     reranked_memories.append(memory)
-                    
-            logger.info(f"重排序完成，保留 {len(reranked_memories)} 条最相关记忆")
             
-            # 打印重排序结果
-            scores = [f"{m['relevance_score']:.4f}" for m in reranked_memories[:3]]
-            logger.info(f"重排序前3条记忆的相关性分数: {', '.join(scores)}")
-            
+            logger.info(f"记忆重排序完成，返回 {len(reranked_memories)} 条记忆")
             return reranked_memories
-            
         except Exception as e:
-            logger.error(f"重排序记忆失败: {str(e)}", exc_info=True)
-            # 失败时返回原始记忆
+            logger.error(f"记忆重排序失败: {str(e)}", exc_info=True)
             return memories[:top_n]
             
     @staticmethod

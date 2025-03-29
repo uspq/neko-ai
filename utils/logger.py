@@ -87,7 +87,8 @@ if config.get("logging.file", True):
             return ('memory' in record.pathname.lower() or 
                     'neo4j' in record.pathname.lower() or 
                     'mysql' in record.pathname.lower() or 
-                    'faiss' in record.pathname.lower())
+                    'faiss' in record.pathname.lower() or
+                    'rerank' in record.pathname.lower())  # 添加重排序日志过滤
     
     memory_filter = MemoryFilter()
     memory_handler.addFilter(memory_filter)
@@ -125,11 +126,30 @@ if config.get("logging.file", True):
     # 创建搜索日志过滤器
     class SearchFilter(logging.Filter):
         def filter(self, record):
-            return 'search' in record.pathname.lower() or 'web_search' in record.pathname.lower()
+            return 'search' in record.pathname.lower() or 'web_search' in record.pathname.lower() or 'rerank' in record.pathname.lower()
     
     search_filter = SearchFilter()
     search_handler.addFilter(search_filter)
     logger.addHandler(search_handler)
+    
+    # 创建专门的重排序日志文件
+    rerank_log_path = os.path.join(logs_dir, "rerank.log")
+    rerank_handler = RotatingFileHandler(
+        rerank_log_path,
+        maxBytes=config.get("logging.max_size", 10) * 1024 * 1024,
+        backupCount=config.get("logging.backup_count", 5),
+        encoding='utf-8'
+    )
+    rerank_handler.setFormatter(detailed_formatter)
+    
+    # 创建重排序日志过滤器
+    class RerankFilter(logging.Filter):
+        def filter(self, record):
+            return 'rerank' in record.pathname.lower()
+    
+    rerank_filter = RerankFilter()
+    rerank_handler.addFilter(rerank_filter)
+    logger.addHandler(rerank_handler)
 
 # 设置为不传播到父记录器
 logger.propagate = False
