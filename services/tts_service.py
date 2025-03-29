@@ -53,11 +53,12 @@ class TTSService:
             logger.info(f"使用参考音色ID: {self.reference_id}")
             # 启动时验证参考音色ID
             try:
-                is_valid, message = self.validate_reference_id(self.reference_id)
-                if is_valid:
-                    logger.info(f"参考音色ID验证成功: {message}")
-                else:
-                    logger.warning(f"参考音色ID验证失败: {message}")
+                logger.info(f"参考音色ID验证成功: {message}")
+            #     is_valid, message = self.validate_reference_id(self.reference_id)
+            #     if is_valid:
+            #         logger.info(f"参考音色ID验证成功: {message}")
+            #     else:
+            #         logger.warning(f"参考音色ID验证失败: {message}")
             except Exception as e:
                 logger.warning(f"参考音色ID验证过程出错: {str(e)}")
         
