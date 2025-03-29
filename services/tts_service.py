@@ -51,16 +51,9 @@ class TTSService:
             logger.warning("未配置Fish Audio参考音色ID，将使用默认音色")
         else:
             logger.info(f"使用参考音色ID: {self.reference_id}")
-            # 启动时验证参考音色ID
-            try:
-                logger.info(f"参考音色ID验证成功: {message}")
-            #     is_valid, message = self.validate_reference_id(self.reference_id)
-            #     if is_valid:
-            #         logger.info(f"参考音色ID验证成功: {message}")
-            #     else:
-            #         logger.warning(f"参考音色ID验证失败: {message}")
-            except Exception as e:
-                logger.warning(f"参考音色ID验证过程出错: {str(e)}")
+            # 跳过音色ID验证，避免不必要的API调用
+            self.skip_reference_validation = True
+            logger.info("已跳过参考音色ID验证")
         
         # 语音设置
         self.voice_settings = {
@@ -76,16 +69,6 @@ class TTSService:
         self.volume = config.get("tts.volume", 1.0)
         self.pitch = config.get("tts.pitch", 0.0)
         
-        # 初始化时检查API状态
-        try:
-            status, message = self.check_api_status()
-            if status:
-                logger.info(f"Fish Audio API 状态正常: {message}")
-            else:
-                logger.warning(f"Fish Audio API 状态异常: {message}")
-        except Exception as e:
-            logger.warning(f"检查Fish Audio API状态出错: {str(e)}")
-        
         logger.info("TTS服务初始化成功（Fish Audio）")
     
     def validate_reference_id(self, reference_id: str) -> Tuple[bool, str]:
@@ -98,6 +81,13 @@ class TTSService:
         Returns:
             (bool, str): 是否有效，消息
         """
+        # 检查是否跳过验证
+        if hasattr(self, 'skip_reference_validation') and self.skip_reference_validation:
+            return True, "音色ID验证已跳过"
+            
+        # 初始化消息变量，避免未定义错误
+        message = "验证未完成"
+            
         if not reference_id:
             return False, "音色ID为空"
             
@@ -113,17 +103,22 @@ class TTSService:
             if response.status_code == 200:
                 data = response.json()
                 if "reference_id" in data and data["reference_id"] == reference_id:
-                    return True, f"音色ID有效，名称: {data.get('name', '未知')}"
+                    message = f"音色ID有效，名称: {data.get('name', '未知')}"
+                    return True, message
                 else:
-                    return True, "音色ID有效，但返回数据格式不完整"
+                    message = "音色ID有效，但返回数据格式不完整"
+                    return True, message
             elif response.status_code == 404:
-                return False, "音色ID不存在"
+                message = "音色ID不存在"
+                return False, message
             else:
-                return False, f"验证请求失败，状态码: {response.status_code}, 错误: {response.text}"
+                message = f"验证请求失败，状态码: {response.status_code}, 错误: {response.text}"
+                return False, message
                 
         except Exception as e:
             logger.error(f"验证音色ID出错: {str(e)}")
-            return False, f"验证过程出错: {str(e)}"
+            message = f"验证过程出错: {str(e)}"
+            return False, message
     
     def check_api_status(self) -> Tuple[bool, str]:
         """
@@ -134,7 +129,7 @@ class TTSService:
         """
         try:
             # 构建状态检查请求URL（使用模型列表端点作为健康检查）
-            url = f"{self.api_base_url}/models"
+            url = f"{self.api_base_url}"
             logger.debug(f"检查API状态，请求URL: {url}")
             
             # 发送请求

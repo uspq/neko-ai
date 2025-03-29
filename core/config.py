@@ -1,8 +1,8 @@
 import os
 import yaml
 import json
-from typing import Dict, Any, Optional
-from pydantic import Field
+from typing import Dict, Any, Optional, Union, List
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings
 
 # 配置文件路径
@@ -94,116 +94,126 @@ class Config:
 config = Config()
 
 class Settings(BaseSettings):
-    """应用配置类"""
+    """应用配置类，从config.yaml读取配置"""
+    
+    # 定义所有配置属性，确保有默认值
+    # 这些将在load_from_file方法中被覆盖
+    
     # API配置
-    API_KEY: str = Field("sk-jivwbgqsesocbzkggntyzjwlkvlyhuiaphesburlvyswzsfc")
-    API_BASE_URL: str = Field("https://api.siliconflow.cn/v1")
-    API_TIMEOUT: int = Field(30)
-    API_AUTH_ENABLED: bool = Field(True)
-    API_RATE_LIMIT: int = Field(60)
+    API_KEY: str = ""
+    API_BASE_URL: str = "https://api.openai.com/v1"
+    API_TIMEOUT: int = 30
+    API_AUTH_ENABLED: bool = True
+    API_RATE_LIMIT: int = 60
     
     # 模型配置
-    MODEL_NAME: str = Field("Pro/deepseek-ai/DeepSeek-V3")
-    MODEL_TEMPERATURE: float = Field(0.7)
-    MODEL_MAX_TOKENS: int = Field(4096)
-    MODEL_TOP_P: float = Field(0.9)
-    MODEL_FREQUENCY_PENALTY: float = Field(0)
-    MODEL_PRESENCE_PENALTY: float = Field(0)
-    MODEL_INPUT_PRICE_PER_1K: float = Field(0.001)  # 输入token价格，每1K tokens
-    MODEL_OUTPUT_PRICE_PER_1K: float = Field(0.002)  # 输出token价格，每1K tokens
+    MODEL_NAME: str = "gpt-3.5-turbo"
+    MODEL_TEMPERATURE: float = 0.7
+    MODEL_MAX_TOKENS: int = 4096
+    MODEL_TOP_P: float = 0.9
+    MODEL_FREQUENCY_PENALTY: float = 0
+    MODEL_PRESENCE_PENALTY: float = 0
+    MODEL_INPUT_PRICE_PER_1K: float = 0.001
+    MODEL_OUTPUT_PRICE_PER_1K: float = 0.002
     
-    # 嵌入模型配置
-    EMBEDDING_MODEL: str = Field("BAAI/bge-large-zh-v1.5")
-    EMBEDDING_BASE_URL: str = Field("")  # 独立的base URL，如果为空则使用API_BASE_URL
-    EMBEDDING_API_KEY: str = Field("")   # 独立的API密钥，如果为空则使用API_KEY
-    EMBEDDING_TIMEOUT: int = Field(30)
-    EMBEDDING_DIMENSION: int = Field(1024)
+    # 嵌入模型配置 - 修复这部分，确保所有属性都存在
+    EMBEDDING_MODEL: str = "text-embedding-ada-002"
+    EMBEDDING_BASE_URL: str = ""
+    EMBEDDING_API_KEY: str = ""
+    EMBEDDING_TIMEOUT: int = 30
+    EMBEDDING_DIMENSION: int = 1024
     
     # 重排序配置
-    RERANK_ENABLED: bool = Field(True)
-    RERANK_MODEL: str = Field("BAAI/bge-reranker-v2-m3")
-    RERANK_TOP_N: int = Field(5)
+    RERANK_ENABLED: bool = True
+    RERANK_MODEL: str = "BAAI/bge-reranker-v2-m3"
+    RERANK_TOP_N: int = 5
     
-    # 网络搜索配置
-    GOOGLE_API_KEY: str = Field("", description="Google搜索API密钥")
-    GOOGLE_CSE_ID: str = Field("", description="Google自定义搜索引擎ID")
-    SERPAPI_API_KEY: str = Field("", description="SerpAPI密钥")
-    WEB_SEARCH_ENABLED: bool = Field(False, description="是否启用网络搜索")
-    WEB_SEARCH_NUM_RESULTS: int = Field(5, description="网络搜索返回结果数量")
+    # 其他配置属性...
+    WEB_SEARCH_ENABLED: bool = False
+    WEB_SEARCH_NUM_RESULTS: int = 5
+    GOOGLE_API_KEY: str = ""
+    GOOGLE_CSE_ID: str = ""
+    SERPAPI_API_KEY: str = ""
     
     # 检索配置
-    RETRIEVAL_GRAPH_RELATED_DEPTH: int = Field(2)
-    RETRIEVAL_MIN_SIMILARITY: float = Field(0.7)
-    RETRIEVAL_FILTER_SIMILARITY_THRESHOLD: float = Field(0.8)
-    RETRIEVAL_PAGE_SIZE: int = Field(10)
-    RETRIEVAL_MAX_PAGE_SIZE: int = Field(100)
+    RETRIEVAL_GRAPH_RELATED_DEPTH: int = 2
+    RETRIEVAL_MIN_SIMILARITY: float = 0.7
+    RETRIEVAL_FILTER_SIMILARITY_THRESHOLD: float = 0.8
+    RETRIEVAL_PAGE_SIZE: int = 10
+    RETRIEVAL_MAX_PAGE_SIZE: int = 100
     
     # 存储配置
-    NEO4J_URI: str = Field("bolt://localhost:7687")
-    NEO4J_USER: str = Field("neo4j")
-    NEO4J_PASSWORD: str = Field("12345678")
-    NEO4J_POOL_SIZE: int = Field(50)
-    FAISS_DIMENSION: int = Field(1024)
-    FAISS_INDEX_TYPE: str = Field("flat")
-    FAISS_REBUILD_INDEX: bool = Field(False)
-    FAISS_MAX_INDEX_SIZE: int = Field(1000000)
+    NEO4J_URI: str = "bolt://localhost:7687"
+    NEO4J_USER: str = "neo4j"
+    NEO4J_PASSWORD: str = "neo4j"
+    NEO4J_POOL_SIZE: int = 50
+    FAISS_DIMENSION: int = 1024
+    FAISS_INDEX_TYPE: str = "flat"
+    FAISS_REBUILD_INDEX: bool = False
+    FAISS_MAX_INDEX_SIZE: int = 1000000
+    FAISS_INDEX_PATH: str = "data/faiss_index.pkl"
     
     # MySQL配置
-    MYSQL_HOST: str = Field("localhost")
-    MYSQL_PORT: int = Field(3306)
-    MYSQL_USER: str = Field("root")
-    MYSQL_PASSWORD: str = Field("password")
-    MYSQL_DATABASE: str = Field("neko_ai")
-    MYSQL_POOL_SIZE: int = Field(5)
-
+    MYSQL_HOST: str = "localhost"
+    MYSQL_PORT: int = 3306
+    MYSQL_USER: str = "root" 
+    MYSQL_PASSWORD: str = "password"
+    MYSQL_DATABASE: str = "neko_ai"
+    MYSQL_POOL_SIZE: int = 5
+    
     # 多对话配置
-    DEFAULT_CONVERSATION_ID: str = Field("default")
-    MAX_CONVERSATIONS: int = Field(100)
-    CONVERSATION_TITLE_MAX_LENGTH: int = Field(100)
-    CONVERSATION_CONTEXT_WINDOW_SIZE: int = Field(15)
-    USE_MYSQL_CONTEXT: bool = Field(True)
+    DEFAULT_CONVERSATION_ID: str = "default"
+    MAX_CONVERSATIONS: int = 100
+    CONVERSATION_TITLE_MAX_LENGTH: int = 100
+    CONVERSATION_CONTEXT_WINDOW_SIZE: int = 15
+    USE_MYSQL_CONTEXT: bool = True
     
     # 应用配置
-    APP_NAME: str = Field("Neko API")
-    APP_VERSION: str = Field("1.1.0")
-    APP_DESCRIPTION: str = Field("Neok AI助手API")
-    DEBUG: bool = Field(False)
-    APP_HOST: str = Field("localhost")
-    APP_PORT: int = Field(9999)
+    APP_NAME: str = "Neko API"
+    APP_VERSION: str = "1.1.0"
+    APP_DESCRIPTION: str = "Neko AI助手API"
+    DEBUG: bool = False
+    APP_HOST: str = "localhost"
+    APP_PORT: int = 9999
     
     # 文件路径
-    BASE_MD_PATH: str = Field("base.md")
-    PROMPT_MD_PATH: str = Field("prompt.md")
-    LOGS_DIR: str = Field("logs")
-    BACKUPS_DIR: str = Field("backups")
-    FAISS_INDEX_PATH: str = Field("data/faiss_index.pkl")
+    BASE_MD_PATH: str = "base.md"
+    PROMPT_MD_PATH: str = "prompt.md"
+    LOGS_DIR: str = "logs"
+    BACKUPS_DIR: str = "backups"
     
     # 知识库配置
-    KNOWLEDGE_DIR: str = Field("knowledge/data")
-    KNOWLEDGE_INDEX_PATH: str = Field("knowledge/index/knowledge_index.pkl")
-    KNOWLEDGE_CHUNK_SIZE: int = Field(1000)
-    KNOWLEDGE_CHUNK_OVERLAP: int = Field(200)
-    KNOWLEDGE_MAX_FILE_SIZE: int = Field(10 * 1024 * 1024)  # 10MB
+    KNOWLEDGE_DIR: str = "knowledge/data"
+    KNOWLEDGE_INDEX_PATH: str = "knowledge/index/knowledge_index.pkl"
+    KNOWLEDGE_CHUNK_SIZE: int = 1000
+    KNOWLEDGE_CHUNK_OVERLAP: int = 200
+    KNOWLEDGE_MAX_FILE_SIZE: int = 10 * 1024 * 1024
     
     # 日志配置
-    LOG_LEVEL: str = Field("INFO")
-    LOG_CONSOLE: bool = Field(True)
-    LOG_FILE: bool = Field(True)
-    LOG_MAX_SIZE: int = Field(10)
-    LOG_BACKUP_COUNT: int = Field(5)
-    LOG_REQUESTS: bool = Field(True)
+    LOG_LEVEL: str = "INFO"
+    LOG_CONSOLE: bool = True
+    LOG_FILE: bool = True
+    LOG_MAX_SIZE: int = 10
+    LOG_BACKUP_COUNT: int = 5
+    LOG_REQUESTS: bool = True
     
     # 用户信息
-    USER_USERNAME: str = Field("admin")
-    USER_PASSWORD_HASH: str = Field("8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918")
-    USER_EMAIL: str = Field("admin@example.com")
-    USER_ROLE: str = Field("admin")
-    USER_ENABLED: bool = Field(True)
-    USER_CREATED_AT: str = Field("2023-01-01 00:00:00")
+    USER_USERNAME: str = "admin"
+    USER_PASSWORD_HASH: str = "8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918"
+    USER_EMAIL: str = "admin@example.com"
+    USER_ROLE: str = "admin"
+    USER_ENABLED: bool = True
+    USER_CREATED_AT: str = "2023-01-01 00:00:00"
     
-    model_config = {
-        "case_sensitive": True
-    }
+    # TTS配置
+    TTS_ENABLED: bool = False
+    TTS_FISH_API_KEY: str = ""
+    TTS_FISH_REFERENCE_ID: str = ""
+    TTS_MODEL: str = "speech-1.6"
+    TTS_DEVELOPER_ID: str = ""
+    TTS_SPEED: float = 1.0
+    TTS_VOLUME: float = 1.0
+    TTS_PITCH: float = 0.0
     
     def __init__(self, **kwargs):
         """初始化配置类并自动加载配置文件"""
@@ -246,213 +256,133 @@ class Settings(BaseSettings):
         return self
     
     def _update_from_dict(self, config: Dict[str, Any]) -> None:
-        """从字典更新配置"""
-        if "api" in config:
-            api_config = config["api"]
-            if "key" in api_config:
-                self.API_KEY = api_config["key"]
-            if "base_url" in api_config:
-                self.API_BASE_URL = api_config["base_url"]
-            if "timeout" in api_config:
-                self.API_TIMEOUT = api_config["timeout"]
-            if "auth_enabled" in api_config:
-                self.API_AUTH_ENABLED = api_config["auth_enabled"]
-            if "rate_limit" in api_config:
-                self.API_RATE_LIMIT = api_config["rate_limit"]
+        """从字典更新配置，设置所有属性"""
+        # API配置
+        self.API_KEY = config.get("api", {}).get("key", "")
+        self.API_BASE_URL = config.get("api", {}).get("base_url", "https://api.openai.com/v1")
+        self.API_TIMEOUT = config.get("api", {}).get("timeout", 30)
+        self.API_AUTH_ENABLED = config.get("api", {}).get("auth_enabled", True)
+        self.API_RATE_LIMIT = config.get("api", {}).get("rate_limit", 60)
         
-        if "model" in config:
-            model_config = config["model"]
-            if "name" in model_config:
-                self.MODEL_NAME = model_config["name"]
-            if "temperature" in model_config:
-                self.MODEL_TEMPERATURE = model_config["temperature"]
-            if "max_tokens" in model_config:
-                self.MODEL_MAX_TOKENS = model_config["max_tokens"]
-            if "top_p" in model_config:
-                self.MODEL_TOP_P = model_config["top_p"]
-            if "frequency_penalty" in model_config:
-                self.MODEL_FREQUENCY_PENALTY = model_config["frequency_penalty"]
-            if "presence_penalty" in model_config:
-                self.MODEL_PRESENCE_PENALTY = model_config["presence_penalty"]
-            if "input_price_per_1k" in model_config:
-                self.MODEL_INPUT_PRICE_PER_1K = model_config["input_price_per_1k"]
-            if "output_price_per_1k" in model_config:
-                self.MODEL_OUTPUT_PRICE_PER_1K = model_config["output_price_per_1k"]
+        # 模型配置
+        self.MODEL_NAME = config.get("model", {}).get("name", "gpt-3.5-turbo")
+        self.MODEL_TEMPERATURE = config.get("model", {}).get("temperature", 0.7)
+        self.MODEL_MAX_TOKENS = config.get("model", {}).get("max_tokens", 4096)
+        self.MODEL_TOP_P = config.get("model", {}).get("top_p", 0.9)
+        self.MODEL_FREQUENCY_PENALTY = config.get("model", {}).get("frequency_penalty", 0)
+        self.MODEL_PRESENCE_PENALTY = config.get("model", {}).get("presence_penalty", 0)
+        self.MODEL_INPUT_PRICE_PER_1K = config.get("model", {}).get("input_price_per_1k", 0.001)
+        self.MODEL_OUTPUT_PRICE_PER_1K = config.get("model", {}).get("output_price_per_1k", 0.002)
         
-        if "embedding" in config:
-            embedding_config = config["embedding"]
-            if "model" in embedding_config:
-                self.EMBEDDING_MODEL = embedding_config["model"]
-            if "base_url" in embedding_config:
-                self.EMBEDDING_BASE_URL = embedding_config["base_url"]
-            if "api_key" in embedding_config:
-                self.EMBEDDING_API_KEY = embedding_config["api_key"]
-            if "timeout" in embedding_config:
-                self.EMBEDDING_TIMEOUT = embedding_config["timeout"]
-            if "dimension" in embedding_config:
-                self.EMBEDDING_DIMENSION = embedding_config["dimension"]
-                self.FAISS_DIMENSION = embedding_config["dimension"]  # 同步更新FAISS维度
+        # 嵌入模型配置 - 修复这里的问题，确保所有属性都有正确设置
+        embedding = config.get("embedding", {})
+        self.EMBEDDING_MODEL = embedding.get("model", "text-embedding-ada-002")
+        self.EMBEDDING_BASE_URL = embedding.get("base_url", "")
+        self.EMBEDDING_API_KEY = embedding.get("api_key", "")
+        self.EMBEDDING_TIMEOUT = embedding.get("timeout", 30)
+        self.EMBEDDING_DIMENSION = embedding.get("dimension", 1024)
         
-        if "rerank" in config:
-            rerank_config = config["rerank"]
-            if "enabled" in rerank_config:
-                self.RERANK_ENABLED = rerank_config["enabled"]
-            if "model" in rerank_config:
-                self.RERANK_MODEL = rerank_config["model"]
-            if "top_n" in rerank_config:
-                self.RERANK_TOP_N = rerank_config["top_n"]
+        # 重排序配置
+        self.RERANK_ENABLED = config.get("rerank", {}).get("enabled", True)
+        self.RERANK_MODEL = config.get("rerank", {}).get("model", "BAAI/bge-reranker-v2-m3")
+        self.RERANK_TOP_N = config.get("rerank", {}).get("top_n", 5)
         
-        if "web_search" in config:
-            web_search_config = config["web_search"]
-            if "google_api_key" in web_search_config:
-                self.GOOGLE_API_KEY = web_search_config["google_api_key"]
-            if "google_cse_id" in web_search_config:
-                self.GOOGLE_CSE_ID = web_search_config["google_cse_id"]
-            if "serpapi_api_key" in web_search_config:
-                self.SERPAPI_API_KEY = web_search_config["serpapi_api_key"]
-            if "enabled" in web_search_config:
-                self.WEB_SEARCH_ENABLED = web_search_config["enabled"]
-            if "num_results" in web_search_config:
-                self.WEB_SEARCH_NUM_RESULTS = web_search_config["num_results"]
+        # 网络搜索配置
+        web_search = config.get("web_search", {})
+        self.WEB_SEARCH_ENABLED = web_search.get("enabled", False)
+        self.WEB_SEARCH_NUM_RESULTS = web_search.get("num_results", 5)
+        self.GOOGLE_API_KEY = web_search.get("google", {}).get("api_key", "")
+        self.GOOGLE_CSE_ID = web_search.get("google", {}).get("cse_id", "")
+        self.SERPAPI_API_KEY = web_search.get("serpapi", {}).get("api_key", "")
         
-        if "retrieval" in config:
-            retrieval_config = config["retrieval"]
-            if "graph_related_depth" in retrieval_config:
-                self.RETRIEVAL_GRAPH_RELATED_DEPTH = retrieval_config["graph_related_depth"]
-            if "min_similarity" in retrieval_config:
-                self.RETRIEVAL_MIN_SIMILARITY = retrieval_config["min_similarity"]
-            if "filter_similarity_threshold" in retrieval_config:
-                self.RETRIEVAL_FILTER_SIMILARITY_THRESHOLD = retrieval_config["filter_similarity_threshold"]
-            if "page_size" in retrieval_config:
-                self.RETRIEVAL_PAGE_SIZE = retrieval_config["page_size"]
-            if "max_page_size" in retrieval_config:
-                self.RETRIEVAL_MAX_PAGE_SIZE = retrieval_config["max_page_size"]
+        # 检索配置
+        self.RETRIEVAL_GRAPH_RELATED_DEPTH = config.get("retrieval", {}).get("graph_related_depth", 2)
+        self.RETRIEVAL_MIN_SIMILARITY = config.get("retrieval", {}).get("min_similarity", 0.7)
+        self.RETRIEVAL_FILTER_SIMILARITY_THRESHOLD = config.get("retrieval", {}).get("filter_similarity_threshold", 0.8)
+        self.RETRIEVAL_PAGE_SIZE = config.get("retrieval", {}).get("page_size", 10)
+        self.RETRIEVAL_MAX_PAGE_SIZE = config.get("retrieval", {}).get("max_page_size", 100)
         
-        if "knowledge" in config:
-            knowledge_config = config["knowledge"]
-            if "chunk_size" in knowledge_config:
-                self.KNOWLEDGE_CHUNK_SIZE = knowledge_config["chunk_size"]
-            if "chunk_overlap" in knowledge_config:
-                self.KNOWLEDGE_CHUNK_OVERLAP = knowledge_config["chunk_overlap"]
-            if "max_file_size" in knowledge_config:
-                self.KNOWLEDGE_MAX_FILE_SIZE = knowledge_config["max_file_size"]
+        # 存储配置
+        storage = config.get("storage", {})
+        # Neo4j
+        self.NEO4J_URI = storage.get("neo4j", {}).get("uri", "bolt://localhost:7687")
+        self.NEO4J_USER = storage.get("neo4j", {}).get("user", "neo4j")
+        self.NEO4J_PASSWORD = storage.get("neo4j", {}).get("password", "neo4j")
+        self.NEO4J_POOL_SIZE = storage.get("neo4j", {}).get("pool_size", 50)
+        # FAISS
+        self.FAISS_DIMENSION = storage.get("faiss", {}).get("dimension", 1024)
+        self.FAISS_INDEX_TYPE = storage.get("faiss", {}).get("index_type", "flat")
+        self.FAISS_REBUILD_INDEX = storage.get("faiss", {}).get("rebuild_index", False)
+        self.FAISS_MAX_INDEX_SIZE = storage.get("faiss", {}).get("max_index_size", 1000000)
+        self.FAISS_INDEX_PATH = storage.get("faiss", {}).get("index_path", "data/faiss_index.pkl")
+        # MySQL
+        self.MYSQL_HOST = storage.get("mysql", {}).get("host", "localhost")
+        self.MYSQL_PORT = storage.get("mysql", {}).get("port", 3306)
+        self.MYSQL_USER = storage.get("mysql", {}).get("user", "root")
+        self.MYSQL_PASSWORD = storage.get("mysql", {}).get("password", "password")
+        self.MYSQL_DATABASE = storage.get("mysql", {}).get("database", "neko_ai")
+        self.MYSQL_POOL_SIZE = storage.get("mysql", {}).get("pool_size", 5)
+
+        # 多对话配置
+        conv = config.get("conversation", {})
+        self.DEFAULT_CONVERSATION_ID = conv.get("default_id", "default")
+        self.MAX_CONVERSATIONS = conv.get("max_conversations", 100)
+        self.CONVERSATION_TITLE_MAX_LENGTH = conv.get("title_max_length", 100)
+        self.CONVERSATION_CONTEXT_WINDOW_SIZE = conv.get("context_window_size", 15)
+        self.USE_MYSQL_CONTEXT = conv.get("use_mysql_context", True)
         
-        if "storage" in config:
-            storage_config = config["storage"]
-            
-            if "neo4j" in storage_config:
-                neo4j_config = storage_config["neo4j"]
-                if "uri" in neo4j_config:
-                    self.NEO4J_URI = neo4j_config["uri"]
-                if "user" in neo4j_config:
-                    self.NEO4J_USER = neo4j_config["user"]
-                if "password" in neo4j_config:
-                    self.NEO4J_PASSWORD = neo4j_config["password"]
-                if "pool_size" in neo4j_config:
-                    self.NEO4J_POOL_SIZE = neo4j_config["pool_size"]
-            
-            if "faiss" in storage_config:
-                faiss_config = storage_config["faiss"]
-                if "dimension" in faiss_config:
-                    self.FAISS_DIMENSION = faiss_config["dimension"]
-                if "index_type" in faiss_config:
-                    self.FAISS_INDEX_TYPE = faiss_config["index_type"]
-                if "rebuild_index" in faiss_config:
-                    self.FAISS_REBUILD_INDEX = faiss_config["rebuild_index"]
-                if "index_path" in faiss_config:
-                    self.FAISS_INDEX_PATH = faiss_config["index_path"]
-                if "max_index_size" in faiss_config:
-                    self.FAISS_MAX_INDEX_SIZE = faiss_config["max_index_size"]
-            
-            if "mysql" in storage_config:
-                mysql_config = storage_config["mysql"]
-                if "host" in mysql_config:
-                    self.MYSQL_HOST = mysql_config["host"]
-                if "port" in mysql_config:
-                    self.MYSQL_PORT = mysql_config["port"]
-                if "user" in mysql_config:
-                    self.MYSQL_USER = mysql_config["user"]
-                if "password" in mysql_config:
-                    self.MYSQL_PASSWORD = mysql_config["password"]
-                if "database" in mysql_config:
-                    self.MYSQL_DATABASE = mysql_config["database"]
-                if "pool_size" in mysql_config:
-                    self.MYSQL_POOL_SIZE = mysql_config["pool_size"]
+        # 应用配置
+        app = config.get("app", {})
+        self.APP_NAME = app.get("name", "Neko API")
+        self.APP_VERSION = app.get("version", "1.1.0")
+        self.APP_DESCRIPTION = app.get("description", "Neko AI助手API")
+        self.DEBUG = app.get("debug", False)
+        self.APP_HOST = app.get("host", "localhost")
+        self.APP_PORT = app.get("port", 9999)
         
-        if "conversation" in config:
-            conversation_config = config["conversation"]
-            if "default_id" in conversation_config:
-                self.DEFAULT_CONVERSATION_ID = conversation_config["default_id"]
-            if "max_conversations" in conversation_config:
-                self.MAX_CONVERSATIONS = conversation_config["max_conversations"]
-            if "title_max_length" in conversation_config:
-                self.CONVERSATION_TITLE_MAX_LENGTH = conversation_config["title_max_length"]
-            if "context_window_size" in conversation_config:
-                self.CONVERSATION_CONTEXT_WINDOW_SIZE = conversation_config["context_window_size"]
-            if "use_mysql_context" in conversation_config:
-                self.USE_MYSQL_CONTEXT = conversation_config["use_mysql_context"]
+        # 文件路径
+        paths = config.get("paths", {})
+        self.BASE_MD_PATH = paths.get("base_md", "base.md")
+        self.PROMPT_MD_PATH = paths.get("prompt_md", "prompt.md")
+        self.LOGS_DIR = paths.get("logs_dir", "logs")
+        self.BACKUPS_DIR = paths.get("backups_dir", "backups")
         
-        if "app" in config:
-            app_config = config["app"]
-            if "name" in app_config:
-                self.APP_NAME = app_config["name"]
-            if "version" in app_config:
-                self.APP_VERSION = app_config["version"]
-            if "description" in app_config:
-                self.APP_DESCRIPTION = app_config["description"]
-            if "debug" in app_config:
-                self.DEBUG = app_config["debug"]
-            if "host" in app_config:
-                self.APP_HOST = app_config["host"]
-            if "port" in app_config:
-                self.APP_PORT = app_config["port"]
+        # 知识库配置
+        knowledge = config.get("knowledge", {})
+        self.KNOWLEDGE_DIR = knowledge.get("dir", "knowledge/data")
+        self.KNOWLEDGE_INDEX_PATH = knowledge.get("index_path", "knowledge/index/knowledge_index.pkl")
+        self.KNOWLEDGE_CHUNK_SIZE = knowledge.get("chunk_size", 1000)
+        self.KNOWLEDGE_CHUNK_OVERLAP = knowledge.get("chunk_overlap", 200)
+        self.KNOWLEDGE_MAX_FILE_SIZE = knowledge.get("max_file_size", 10 * 1024 * 1024)
         
-        if "paths" in config:
-            paths_config = config["paths"]
-            if "base_md" in paths_config:
-                self.BASE_MD_PATH = paths_config["base_md"]
-            if "prompt_md" in paths_config:
-                self.PROMPT_MD_PATH = paths_config["prompt_md"]
-            if "logs_dir" in paths_config:
-                self.LOGS_DIR = paths_config["logs_dir"]
-            if "backups_dir" in paths_config:
-                self.BACKUPS_DIR = paths_config["backups_dir"]
-            if "faiss_index_path" in paths_config:
-                self.FAISS_INDEX_PATH = paths_config["faiss_index_path"]
-            if "knowledge_dir" in paths_config:
-                self.KNOWLEDGE_DIR = paths_config["knowledge_dir"]
-            if "knowledge_index_path" in paths_config:
-                self.KNOWLEDGE_INDEX_PATH = paths_config["knowledge_index_path"]
+        # 日志配置
+        logging = config.get("logging", {})
+        self.LOG_LEVEL = logging.get("level", "INFO")
+        self.LOG_CONSOLE = logging.get("console", True)
+        self.LOG_FILE = logging.get("file", True)
+        self.LOG_MAX_SIZE = logging.get("max_size", 10)
+        self.LOG_BACKUP_COUNT = logging.get("backup_count", 5)
+        self.LOG_REQUESTS = logging.get("log_requests", True)
         
-        if "logging" in config:
-            logging_config = config["logging"]
-            if "level" in logging_config:
-                self.LOG_LEVEL = logging_config["level"]
-            if "console" in logging_config:
-                self.LOG_CONSOLE = logging_config["console"]
-            if "file" in logging_config:
-                self.LOG_FILE = logging_config["file"]
-            if "max_size" in logging_config:
-                self.LOG_MAX_SIZE = logging_config["max_size"]
-            if "backup_count" in logging_config:
-                self.LOG_BACKUP_COUNT = logging_config["backup_count"]
-            if "log_requests" in logging_config:
-                self.LOG_REQUESTS = logging_config["log_requests"]
+        # 用户信息
+        user = config.get("user", {})
+        self.USER_USERNAME = user.get("username", "admin")
+        self.USER_PASSWORD_HASH = user.get("password_hash", "8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918")
+        self.USER_EMAIL = user.get("email", "admin@example.com")
+        self.USER_ROLE = user.get("role", "admin")
+        self.USER_ENABLED = user.get("enabled", True)
+        self.USER_CREATED_AT = user.get("created_at", "2023-01-01 00:00:00")
         
-        if "user" in config:
-            user_config = config["user"]
-            if "username" in user_config:
-                self.USER_USERNAME = user_config["username"]
-            if "password_hash" in user_config:
-                self.USER_PASSWORD_HASH = user_config["password_hash"]
-            if "email" in user_config:
-                self.USER_EMAIL = user_config["email"]
-            if "role" in user_config:
-                self.USER_ROLE = user_config["role"]
-            if "enabled" in user_config:
-                self.USER_ENABLED = user_config["enabled"]
-            if "created_at" in user_config:
-                self.USER_CREATED_AT = user_config["created_at"]
+        # TTS配置
+        tts = config.get("tts", {})
+        self.TTS_ENABLED = tts.get("enabled", False)
+        self.TTS_FISH_API_KEY = tts.get("fish_api_key", "")
+        self.TTS_FISH_REFERENCE_ID = tts.get("fish_reference_id", "")
+        self.TTS_MODEL = tts.get("model", "speech-1.6")
+        self.TTS_DEVELOPER_ID = tts.get("developer_id", "")
+        self.TTS_SPEED = tts.get("speed", 1.0)
+        self.TTS_VOLUME = tts.get("volume", 1.0)
+        self.TTS_PITCH = tts.get("pitch", 0.0)
 
 # 创建全局设置实例
 settings = Settings()

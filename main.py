@@ -105,6 +105,24 @@ def start():
     os.makedirs(settings.KNOWLEDGE_DIR, exist_ok=True)
     os.makedirs(os.path.dirname(settings.KNOWLEDGE_INDEX_PATH), exist_ok=True)
     
+    # 检查是否需要初始化数据库
+    # 如果是直接运行main.py，则需要初始化数据库
+    # 如果是通过run.py运行，则已经初始化过数据库
+    if os.path.basename(sys.argv[0]) == 'main.py':
+        from utils.db_init import init_all_databases
+        logger.info("开始初始化数据库...")
+        try:
+            init_result = init_all_databases()
+            if not init_result:
+                logger.warning("数据库初始化未完全成功，服务可能无法正常工作")
+            else:
+                logger.info("数据库初始化成功")
+        except Exception as e:
+            logger.error(f"数据库初始化失败: {str(e)}", exc_info=True)
+            logger.warning("数据库初始化失败，但仍尝试启动服务")
+    else:
+        logger.info("跳过数据库初始化，假设已通过run.py完成初始化")
+    
     # 启动服务
     logger.info(f"启动 {settings.APP_NAME} 服务")
     uvicorn.run(

@@ -104,15 +104,30 @@ class Neo4jDatabase:
         ai_response_preview = ai_response[:100] + "..." if len(ai_response) > 100 else ai_response
         
         with self.driver.session() as session:
-            # 首先检查是否存在高度相似的记忆（同一对话内）
-            for memory in similar_memories:
-                # 只考虑相同对话内的记忆，或者如果未指定对话ID则考虑全部
-                if memory.conversation_id != conversation_id and conversation_id is not None:
-                    continue
-                    
-                if memory.similarity > 0.95:  # 相似度超过95%视为重复
-                    logger.info(f"发现高度相似的记忆 (相似度: {memory.similarity:.4f})，跳过创建")
-                    return memory.timestamp  # 直接返回已存在的记忆时间戳
+            # 首先检查Neo4j中是否有记忆
+            node_count_result = session.run("MATCH (n:Memory) RETURN count(n) as count").single()
+            neo4j_has_records = node_count_result and node_count_result["count"] > 0
+            
+            # 仅当Neo4j中确实有记忆时，才检查是否存在高度相似的记忆
+            if neo4j_has_records and similar_memories:
+                # 首先检查是否存在高度相似的记忆（同一对话内）
+                for memory in similar_memories:
+                    # 只考虑相同对话内的记忆，或者如果未指定对话ID则考虑全部
+                    if memory.conversation_id != conversation_id and conversation_id is not None:
+                        continue
+                        
+                    if memory.similarity > 0.95:  # 相似度超过95%视为重复
+                        # 额外验证该记忆是否存在于Neo4j
+                        verify_exists = session.run("""
+                            MATCH (m:Memory {timestamp: $timestamp})
+                            RETURN count(m) as exists
+                        """, timestamp=memory.timestamp).single()
+                        
+                        if verify_exists and verify_exists["exists"] > 0:
+                            logger.info(f"发现高度相似的记忆 (相似度: {memory.similarity:.4f})，跳过创建")
+                            return memory.timestamp  # 直接返回已存在的记忆时间戳
+                        else:
+                            logger.info(f"找到高度相似的记忆但不存在于Neo4j数据库中，继续创建新记忆")
             
             # 创建查询参数
             create_params = {
@@ -134,6 +149,12 @@ class Neo4jDatabase:
                     created_at: datetime()
                 })
             """, **create_params)
+            logger.info(f"已创建新记忆节点, 时间戳: {timestamp}")
+            
+            # 如果Neo4j中没有其他记忆或similar_memories为空，就不需要建立关系
+            if not neo4j_has_records or not similar_memories:
+                logger.info(f"Neo4j为空或没有相似记忆，跳过关系创建")
+                return timestamp
             
             # 使用集合去重，只保留相似度最高的关系
             processed_timestamps = set()
@@ -142,6 +163,16 @@ class Neo4jDatabase:
             sorted_memories = sorted(similar_memories, key=lambda x: x.similarity, reverse=True)
             
             for memory in sorted_memories:
+                # 首先验证该记忆是否存在于Neo4j
+                verify_exists = session.run("""
+                    MATCH (m:Memory {timestamp: $timestamp})
+                    RETURN count(m) as exists
+                """, timestamp=memory.timestamp).single()
+                
+                if not verify_exists or verify_exists["exists"] == 0:
+                    logger.info(f"相似记忆 {memory.timestamp} 不存在于Neo4j中，跳过关系创建")
+                    continue
+                
                 # 优先考虑同一对话内的记忆建立关系
                 same_conversation = memory.conversation_id == conversation_id
                 

@@ -65,7 +65,7 @@ class FAISSMemoryStore:
             logger.info(f"FAISS索引已保存，包含 {len(self.texts)} 条记忆")
             return True
         except Exception as e:
-            logger.error(f"保存FAISS索引失败: {str(e)}")
+            logger.error(f"保存FAISS索引失败: {str(e)}", exc_info=True)
             return False
 
     def add_text(self, text: str, embedding: np.ndarray, timestamp: str, conversation_id: int = None):
@@ -77,15 +77,117 @@ class FAISSMemoryStore:
             timestamp: 时间戳，作为唯一标识
             conversation_id: 对话ID，默认为None表示全局记忆
         """
-        # 确保存储完整对话内容以及对话ID
-        self.texts.append({
-            "text": text,
-            "timestamp": timestamp,
-            "conversation_id": conversation_id
-        })
-        self.index.add(np.array([embedding]))
-        self.save_index()
-        logger.info(f"已保存新记忆，当前共有 {len(self.texts)} 条记忆，对话ID: {conversation_id or '全局'}")
+        try:
+            logger.info(f"添加新记忆到FAISS，时间戳: {timestamp}, 对话ID: {conversation_id or '全局'}")
+            logger.debug(f"记忆文本长度: {len(text)}, 向量维度: {embedding.shape if hasattr(embedding, 'shape') else 'unknown'}")
+            
+            # 确保存储完整对话内容以及对话ID
+            self.texts.append({
+                "text": text,
+                "timestamp": timestamp,
+                "conversation_id": conversation_id
+            })
+            
+            # 确保embedding是正确的numpy数组格式
+            if not isinstance(embedding, np.ndarray):
+                logger.warning(f"向量不是numpy数组，正在转换，类型: {type(embedding)}")
+                embedding = np.array(embedding, dtype=np.float32)
+                
+            if len(embedding.shape) == 1:
+                embedding = embedding.reshape(1, -1)
+                
+            if embedding.dtype != np.float32:
+                embedding = embedding.astype(np.float32)
+                
+            # 检查维度
+            if embedding.shape[1] != self.dimension:
+                logger.warning(f"向量维度不匹配，预期: {self.dimension}, 实际: {embedding.shape[1]}")
+                if embedding.shape[1] > self.dimension:
+                    embedding = embedding[:, :self.dimension]
+                else:
+                    # 填充向量
+                    padding = np.zeros((1, self.dimension - embedding.shape[1]), dtype=np.float32)
+                    embedding = np.hstack((embedding, padding))
+                
+            # 添加到索引
+            self.index.add(embedding)
+            
+            # 每100个记忆保存一次索引，或总数量小于100时每次保存
+            total_memories = len(self.texts)
+            if total_memories % 100 == 0 or total_memories < 100:
+                save_success = self.save_index()
+                if save_success:
+                    logger.info(f"成功保存FAISS索引，总记忆数: {total_memories}")
+                else:
+                    logger.error(f"保存FAISS索引失败，总记忆数: {total_memories}")
+            
+            logger.info(f"已保存新记忆，当前共有 {len(self.texts)} 条记忆，对话ID: {conversation_id or '全局'}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"添加文本到FAISS索引失败: {str(e)}", exc_info=True)
+            return False
+            
+    def add_texts_batch(self, texts: List[str], embeddings: np.ndarray, timestamps: List[str], 
+                        conversation_ids: List[Optional[int]] = None):
+        """批量添加记忆到FAISS索引
+        
+        Args:
+            texts: 完整对话文本列表
+            embeddings: 文本的向量表示矩阵（二维numpy数组）
+            timestamps: 时间戳列表
+            conversation_ids: 对话ID列表，None元素表示全局记忆
+            
+        Returns:
+            bool: 操作是否成功
+        """
+        try:
+            if conversation_ids is None:
+                conversation_ids = [None] * len(texts)
+                
+            logger.info(f"批量添加 {len(texts)} 条记忆到FAISS")
+            
+            # 确保embeddings是二维数组
+            if len(embeddings.shape) == 1:
+                embeddings = embeddings.reshape(1, -1)
+                
+            # 确保数据类型正确
+            if embeddings.dtype != np.float32:
+                embeddings = embeddings.astype(np.float32)
+                
+            # 检查维度
+            if embeddings.shape[1] != self.dimension:
+                logger.warning(f"批量向量维度不匹配，预期: {self.dimension}, 实际: {embeddings.shape[1]}")
+                if embeddings.shape[1] > self.dimension:
+                    embeddings = embeddings[:, :self.dimension]
+                else:
+                    # 填充向量
+                    padding = np.zeros((embeddings.shape[0], self.dimension - embeddings.shape[1]), dtype=np.float32)
+                    embeddings = np.hstack((embeddings, padding))
+            
+            # 添加文本记录
+            for i, (text, timestamp, conv_id) in enumerate(zip(texts, timestamps, conversation_ids)):
+                self.texts.append({
+                    "text": text,
+                    "timestamp": timestamp,
+                    "conversation_id": conv_id
+                })
+                
+            # 添加到索引
+            self.index.add(embeddings)
+            
+            # 保存索引
+            save_success = self.save_index()
+            if save_success:
+                logger.info(f"批量添加成功并保存索引，当前总记忆数: {len(self.texts)}")
+            else:
+                logger.error(f"批量添加成功但保存索引失败，当前总记忆数: {len(self.texts)}")
+                
+            return True
+            
+        except Exception as e:
+            logger.error(f"批量添加文本到FAISS索引失败: {str(e)}", exc_info=True)
+            return False
 
     def search(self, query_embedding: np.ndarray, k=3, conversation_id: int = None) -> List[Memory]:
         """搜索相似记忆
@@ -99,50 +201,96 @@ class FAISSMemoryStore:
             List[Memory]: 相似记忆列表
         """
         if self.index.ntotal == 0:
+            logger.info("FAISS索引为空，无法搜索")
             return []
+            
+        logger.info(f"FAISS搜索: k={k}, 对话ID={conversation_id or '全部'}, 索引大小={self.index.ntotal}")
         
-        # 确保查询向量的维度正确
-        query_embedding = query_embedding.reshape(1, -1)
-        if query_embedding.shape[1] != self.dimension:
-            raise ValueError(f"查询向量维度不正确。期望维度: {self.dimension}, 实际维度: {query_embedding.shape[1]}")
-        
-        # 搜索最相似的k个向量
-        distances, indices = self.index.search(query_embedding, min(k * 3, self.index.ntotal))  # 多搜索一些，后面可能会过滤
-        results = []
-        
-        for i, idx in enumerate(indices[0]):
-            if idx < len(self.texts):
-                text = self.texts[idx]["text"]
-                timestamp = self.texts[idx]["timestamp"]
-                item_conversation_id = self.texts[idx].get("conversation_id")
+        try:
+            # 确保查询向量的维度正确
+            original_shape = query_embedding.shape
+            
+            # 如果是1D数组，转换为2D
+            if len(original_shape) == 1:
+                logger.debug(f"将1D查询向量 {original_shape} 转换为2D")
+                query_embedding = query_embedding.reshape(1, -1)
                 
-                # 如果指定了对话ID，只返回对应对话的记忆
-                if conversation_id is not None and item_conversation_id != conversation_id:
-                    continue
-                    
-                # 将L2距离转换为相似度分数（0-1之间）
-                similarity = 1 / (1 + distances[0][i])
+            # 检查维度并处理不匹配情况
+            if query_embedding.shape[1] != self.dimension:
+                logger.warning(f"查询向量维度不匹配。预期: {self.dimension}, 实际: {query_embedding.shape[1]}")
                 
-                # 解析存储的文本
-                parts = text.split("\n助手: ")
-                if len(parts) == 2:
-                    user_message = parts[0].replace("用户: ", "")
-                    ai_response = parts[1]
+                # 尝试调整维度
+                if query_embedding.shape[1] > self.dimension:
+                    # 截断维度
+                    logger.info(f"截断查询向量维度从 {query_embedding.shape[1]} 到 {self.dimension}")
+                    query_embedding = query_embedding[:, :self.dimension]
+                else:
+                    # 填充维度
+                    logger.info(f"填充查询向量维度从 {query_embedding.shape[1]} 到 {self.dimension}")
+                    padding = np.zeros((1, self.dimension - query_embedding.shape[1]), dtype=np.float32)
+                    query_embedding = np.hstack((query_embedding, padding))
+            
+            # 确保数据类型正确
+            if query_embedding.dtype != np.float32:
+                logger.debug(f"将查询向量类型从 {query_embedding.dtype} 转换为 float32")
+                query_embedding = query_embedding.astype(np.float32)
+            
+            # 搜索最相似的k个向量
+            search_k = min(k * 3, self.index.ntotal)  # 多搜索一些，后面可能会过滤
+            logger.debug(f"FAISS搜索 k={search_k} (原始k={k})")
+            
+            distances, indices = self.index.search(query_embedding, search_k)
+            
+            # 预处理结果
+            search_results = []
+            
+            for i, idx in enumerate(indices[0]):
+                if idx < len(self.texts) and idx >= 0:
+                    text = self.texts[idx]["text"]
+                    timestamp = self.texts[idx]["timestamp"]
+                    item_conversation_id = self.texts[idx].get("conversation_id")
                     
-                    memory = Memory(
-                        user_message=user_message,
-                        ai_response=ai_response,
-                        timestamp=timestamp,
-                        similarity=similarity,
-                        conversation_id=item_conversation_id
-                    )
-                    results.append(memory)
+                    # 将L2距离转换为相似度分数（0-1之间）
+                    distance = distances[0][i]
+                    similarity = 1.0 / (1.0 + distance)
                     
-                    # 如果已经收集了足够的结果，就返回
-                    if len(results) >= k:
-                        break
-        
-        return results
+                    # 如果指定了对话ID，只返回对应对话的记忆
+                    if conversation_id is not None and item_conversation_id != conversation_id:
+                        logger.debug(f"跳过不匹配对话ID的记忆: {timestamp}, 对话ID={item_conversation_id}")
+                        continue
+                        
+                    # 解析存储的文本
+                    parts = text.split("\n助手: ")
+                    if len(parts) == 2:
+                        user_message = parts[0].replace("用户: ", "")
+                        ai_response = parts[1]
+                        
+                        memory = Memory(
+                            user_message=user_message,
+                            ai_response=ai_response,
+                            timestamp=timestamp,
+                            similarity=similarity,
+                            conversation_id=item_conversation_id
+                        )
+                        search_results.append(memory)
+                        
+                        logger.debug(f"FAISS找到记忆: {timestamp}, 相似度={similarity:.4f}, 距离={distance:.4f}")
+                else:
+                    logger.warning(f"FAISS索引不匹配: {idx} >= {len(self.texts)} 或 {idx} < 0")
+            
+            # 按相似度从高到低排序
+            search_results.sort(key=lambda x: x.similarity, reverse=True)
+            
+            # 限制返回数量
+            final_results = search_results[:k]
+            
+            logger.info(f"FAISS搜索完成: 找到 {len(final_results)}/{len(search_results)} 条相关记忆")
+            
+            return final_results
+            
+        except Exception as e:
+            logger.error(f"FAISS搜索失败: {str(e)}", exc_info=True)
+            return []
 
     def clear_memory(self, conversation_id: Optional[int] = None):
         """清除记忆数据

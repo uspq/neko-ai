@@ -3,6 +3,7 @@ from datetime import datetime
 import os
 from openai import OpenAI, AsyncOpenAI
 from pydantic import Field
+import time
 
 from core.config import settings
 from utils.logger import logger
@@ -70,10 +71,44 @@ class ChatService:
             web_search_results = []
             
             if use_memory:
-                context, memories_used = MemoryService.get_context(
-                    message, 
-                    conversation_id=conversation_id
-                )
+                logger.info(f"使用增强记忆检索，对话ID: {conversation_id or '默认'}")
+                start_memory_time = time.time()
+                
+                # 使用增强版记忆检索
+                try:
+                    context, memories_used = MemoryService.get_enhanced_context(
+                        query=message, 
+                        max_memories=5,  # 可以根据需要调整
+                        conversation_id=conversation_id
+                    )
+                    
+                    memory_time = time.time() - start_memory_time
+                    logger.info(f"增强记忆检索完成，获取了 {len(memories_used)} 条记忆，耗时: {memory_time:.2f}秒")
+                    
+                    # 打印记忆来源统计
+                    if memories_used:
+                        sources = [m.get("source", "unknown") for m in memories_used]
+                        source_stats = {source: sources.count(source) for source in set(sources)}
+                        logger.info(f"记忆来源统计: {source_stats}")
+                        
+                        # 打印前3条记忆的相关性分数（如果有）
+                        relevance_scores = []
+                        for i, memory in enumerate(memories_used[:3]):
+                            score = memory.get("relevance_score", memory.get("similarity", None))
+                            if score is not None:
+                                relevance_scores.append(f"{score:.4f}")
+                            else:
+                                relevance_scores.append("未知")
+                        
+                        if relevance_scores:
+                            logger.info(f"前3条记忆的相关性分数: {', '.join(relevance_scores)}")
+                except Exception as e:
+                    logger.error(f"增强记忆检索失败: {str(e)}", exc_info=True)
+                    # 失败时回退到原始方法
+                    context, memories_used = MemoryService.get_context(
+                        message, 
+                        conversation_id=conversation_id
+                    )
             
             # 获取知识库搜索结果
             if use_knowledge:
@@ -287,33 +322,62 @@ class ChatService:
             # 如果有对话ID，保存到MySQL
             if conversation_id:
                 from services.conversation_service import conversation_service
+                from db.mysql_store import mysql_db
                 
-                metadata = {
-                    "memories_used": [mem["timestamp"] for mem in memories_used],
-                    "knowledge_used": [result.filename for result in knowledge_results] if knowledge_results else [],
-                    "web_search_used": [result.get("metadata", {}).get("title", "") for result in web_search_results] if web_search_results else [],
-                    "use_memory": use_memory,
-                    "use_knowledge": use_knowledge,
-                    "use_web_search": use_web_search
-                }
+                # 首先检查对话是否存在
+                conversation = mysql_db.get_conversation(conversation_id)
+                if not conversation:
+                    logger.warning(f"要保存消息的对话ID不存在: {conversation_id}，尝试创建新对话")
+                    # 创建新对话
+                    title = f"对话 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+                    new_id = mysql_db.create_conversation(title=title)
+                    if new_id:
+                        conversation_id = new_id
+                        logger.info(f"已创建新对话: ID={new_id}, 标题={title}")
+                    else:
+                        logger.error(f"无法创建新对话，消息将不会保存")
+                        conversation_id = None
                 
-                conversation_service.save_message(
-                    conversation_id=conversation_id,
-                    timestamp=timestamp,
-                    user_message=message,
-                    ai_response=full_response,
-                    tokens_input=token_info.input_tokens,
-                    tokens_output=token_info.output_tokens,
-                    cost=token_info.total_cost,
-                    metadata=metadata
-                )
-                
-                # 保存关联文件（如果有新的）
-                if conversation_files:
-                    conversation_service.update_conversation_files(
+                if conversation_id:
+                    metadata = {
+                        "memories_used": [mem["timestamp"] for mem in memories_used],
+                        "knowledge_used": [result.filename for result in knowledge_results] if knowledge_results else [],
+                        "web_search_used": [result.get("metadata", {}).get("title", "") for result in web_search_results] if web_search_results else [],
+                        "use_memory": use_memory,
+                        "use_knowledge": use_knowledge,
+                        "use_web_search": use_web_search
+                    }
+                    
+                    logger.info(f"保存对话消息: ID={conversation_id}, 时间戳={timestamp}")
+                    
+                    save_result = conversation_service.save_message(
                         conversation_id=conversation_id,
-                        file_ids=conversation_files
+                        timestamp=timestamp,
+                        user_message=message,
+                        ai_response=full_response,
+                        tokens_input=token_info.input_tokens,
+                        tokens_output=token_info.output_tokens,
+                        cost=token_info.total_cost,
+                        metadata=metadata
                     )
+                    
+                    if save_result:
+                        logger.info(f"对话消息保存成功: {conversation_id}, 时间戳: {timestamp}")
+                    else:
+                        logger.error(f"对话消息保存失败: {conversation_id}, 时间戳: {timestamp}")
+                    
+                    # 保存关联文件（如果有新的）
+                    if conversation_files:
+                        files_result = conversation_service.update_conversation_files(
+                            conversation_id=conversation_id,
+                            file_ids=conversation_files
+                        )
+                        if files_result:
+                            logger.info(f"更新对话关联文件成功: {conversation_id}, 文件: {conversation_files}")
+                        else:
+                            logger.warning(f"更新对话关联文件失败: {conversation_id}")
+            else:
+                logger.info("未指定对话ID，跳过保存消息")
             
             # 构建响应对象
             chat_response = ChatResponse(

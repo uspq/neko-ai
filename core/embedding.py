@@ -21,13 +21,6 @@ def get_embedding(text: str) -> np.ndarray:
     if not text:
         raise ValueError("输入文本不能全为空白字符")
     
-    # 检查文本长度，如果过长则截断
-    # 中文每个字约1.5个token，512 tokens约等于340个字符
-    max_chars = 340
-    if len(text) > max_chars:
-        logger.warning(f"文本过长 ({len(text)} 字符)，截断至 {max_chars} 字符")
-        text = text[:max_chars]
-    
     # 直接使用API获取嵌入向量
     embedding = get_embedding_from_api(text)
     

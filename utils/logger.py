@@ -23,9 +23,14 @@ level_map = {
 }
 logger.setLevel(level_map.get(log_level, logging.INFO))
 
-# 创建格式化器
+# 创建标准格式化器
 formatter = logging.Formatter(
     '%(asctime)s - %(name)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s'
+)
+
+# 创建详细格式化器，包含进程ID和线程信息
+detailed_formatter = logging.Formatter(
+    '%(asctime)s - %(name)s - %(levelname)s - %(filename)s:%(lineno)d - [%(process)d/%(threadName)s] - %(message)s'
 )
 
 # 添加控制台处理器
@@ -65,6 +70,47 @@ if config.get("logging.file", True):
     api_filter = APIFilter()
     api_handler.addFilter(api_filter)
     logger.addHandler(api_handler)
+    
+    # 内存和记忆日志文件
+    memory_log_path = os.path.join(logs_dir, "memory.log")
+    memory_handler = RotatingFileHandler(
+        memory_log_path,
+        maxBytes=config.get("logging.max_size", 10) * 1024 * 1024,
+        backupCount=config.get("logging.backup_count", 5),
+        encoding='utf-8'
+    )
+    memory_handler.setFormatter(detailed_formatter)
+    
+    # 创建记忆日志过滤器
+    class MemoryFilter(logging.Filter):
+        def filter(self, record):
+            return ('memory' in record.pathname.lower() or 
+                    'neo4j' in record.pathname.lower() or 
+                    'mysql' in record.pathname.lower() or 
+                    'faiss' in record.pathname.lower())
+    
+    memory_filter = MemoryFilter()
+    memory_handler.addFilter(memory_filter)
+    logger.addHandler(memory_handler)
+    
+    # 数据库日志文件
+    db_log_path = os.path.join(logs_dir, "database.log")
+    db_handler = RotatingFileHandler(
+        db_log_path,
+        maxBytes=config.get("logging.max_size", 10) * 1024 * 1024,
+        backupCount=config.get("logging.backup_count", 5),
+        encoding='utf-8'
+    )
+    db_handler.setFormatter(detailed_formatter)
+    
+    # 创建数据库日志过滤器
+    class DatabaseFilter(logging.Filter):
+        def filter(self, record):
+            return 'mysql' in record.pathname.lower() or 'neo4j' in record.pathname.lower()
+    
+    db_filter = DatabaseFilter()
+    db_handler.addFilter(db_filter)
+    logger.addHandler(db_handler)
     
     # 搜索日志文件
     search_log_path = os.path.join(logs_dir, "search.log")

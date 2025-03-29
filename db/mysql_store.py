@@ -19,9 +19,14 @@ class MySQLStore:
                 'host': settings.MYSQL_HOST,
                 'user': settings.MYSQL_USER,
                 'password': settings.MYSQL_PASSWORD,
-                'database': settings.MYSQL_DATABASE,
                 'port': settings.MYSQL_PORT
             }
+            
+            # 首先不指定数据库名创建连接，确保数据库存在
+            self._ensure_database_exists()
+            
+            # 加入数据库名称，创建正式连接池
+            self.db_config['database'] = settings.MYSQL_DATABASE
             
             # 创建连接池
             self.pool = mysql.connector.pooling.MySQLConnectionPool(
@@ -39,6 +44,42 @@ class MySQLStore:
             logger.error(f"MySQL连接池初始化失败: {str(e)}")
             raise
     
+    def _ensure_database_exists(self):
+        """确保数据库存在，如果不存在则创建"""
+        conn = None
+        cursor = None
+        try:
+            # 不指定数据库名连接到MySQL服务器
+            conn = mysql.connector.connect(
+                host=self.db_config['host'],
+                user=self.db_config['user'],
+                password=self.db_config['password'],
+                port=self.db_config['port']
+            )
+            cursor = conn.cursor()
+            
+            # 检查数据库是否存在
+            db_name = settings.MYSQL_DATABASE
+            cursor.execute(f"SHOW DATABASES LIKE '{db_name}'")
+            result = cursor.fetchone()
+            
+            if not result:
+                logger.info(f"数据库 {db_name} 不存在，正在创建...")
+                cursor.execute(f"CREATE DATABASE {db_name} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci")
+                conn.commit()
+                logger.info(f"数据库 {db_name} 创建成功")
+            else:
+                logger.info(f"数据库 {db_name} 已存在")
+                
+        except Exception as e:
+            logger.error(f"确保数据库存在失败: {str(e)}")
+            raise
+        finally:
+            if cursor:
+                cursor.close()
+            if conn:
+                conn.close()
+    
     def _init_tables(self):
         """初始化必要的数据库表"""
         try:
@@ -47,34 +88,68 @@ class MySQLStore:
             cursor = conn.cursor()
             
             # 创建对话表
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS conversations (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
-                    title VARCHAR(255) NOT NULL,
-                    created_at DATETIME NOT NULL,
-                    updated_at DATETIME NOT NULL,
-                    settings JSON,
-                    description TEXT
-                )
-            """)
+            try:
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS conversations (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        title VARCHAR(255) NOT NULL,
+                        created_at DATETIME NOT NULL,
+                        updated_at DATETIME NOT NULL,
+                        settings JSON,
+                        description TEXT
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+                """)
+                logger.info("对话表初始化成功")
+            except Exception as e:
+                logger.error(f"创建对话表失败: {str(e)}")
+                # 继续尝试创建其他表
             
             # 创建对话消息表
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS conversation_messages (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
-                    conversation_id INT NOT NULL,
-                    timestamp VARCHAR(50) NOT NULL,
-                    user_message TEXT NOT NULL,
-                    ai_response TEXT NOT NULL,
-                    tokens_input INT,
-                    tokens_output INT,
-                    cost FLOAT,
-                    created_at DATETIME NOT NULL,
-                    metadata JSON,
-                    FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE,
-                    INDEX (conversation_id, timestamp)
-                )
-            """)
+            try:
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS conversation_messages (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        conversation_id INT NOT NULL,
+                        timestamp VARCHAR(50) NOT NULL,
+                        user_message TEXT NOT NULL,
+                        ai_response TEXT NOT NULL,
+                        tokens_input INT,
+                        tokens_output INT,
+                        cost FLOAT,
+                        created_at DATETIME NOT NULL,
+                        metadata JSON,
+                        INDEX (conversation_id, timestamp)
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+                """)
+                logger.info("对话消息表初始化成功")
+                
+                # 单独添加外键约束
+                try:
+                    # 检查是否已存在约束
+                    cursor.execute("""
+                        SELECT COUNT(*)
+                        FROM information_schema.TABLE_CONSTRAINTS 
+                        WHERE CONSTRAINT_SCHEMA = %s 
+                        AND CONSTRAINT_NAME = 'fk_conversation_id'
+                    """, (settings.MYSQL_DATABASE,))
+                    
+                    constraint_exists = cursor.fetchone()[0] > 0
+                    
+                    if constraint_exists:
+                        logger.info("外键约束已存在，跳过添加")
+                    else:
+                        cursor.execute("""
+                            ALTER TABLE conversation_messages
+                            ADD CONSTRAINT fk_conversation_id
+                            FOREIGN KEY (conversation_id) REFERENCES conversations(id) 
+                            ON DELETE CASCADE
+                        """)
+                        logger.info("对话消息表外键约束添加成功")
+                except Exception as e:
+                    logger.warning(f"添加外键约束失败 (这可能是正常的，如果约束已存在): {str(e)}")
+                    # 不中断流程
+            except Exception as e:
+                logger.error(f"创建对话消息表失败: {str(e)}")
             
             conn.commit()
             logger.info("数据库表初始化成功")
@@ -335,26 +410,64 @@ class MySQLStore:
             bool: 操作是否成功
         """
         try:
+            # 首先检查对话是否存在
+            query_conv = "SELECT id FROM conversations WHERE id = %s"
+            conv_exists = self.execute_query(query_conv, (conversation_id,), fetch='one')
+            
+            if not conv_exists:
+                logger.warning(f"保存消息失败，对话ID不存在: {conversation_id}")
+                return False
+                
+            # 检查是否存在相同时间戳的消息，避免重复保存
+            check_query = """
+                SELECT COUNT(*) as count FROM conversation_messages 
+                WHERE conversation_id = %s AND timestamp = %s
+            """
+            check_result = self.execute_query(check_query, (conversation_id, timestamp), fetch='one')
+            
+            if check_result and check_result.get('count', 0) > 0:
+                logger.info(f"跳过保存已存在的对话消息: {conversation_id}, timestamp: {timestamp}")
+                return True
+                
             now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             metadata_json = json.dumps(metadata or {})
             
-            query = """
-                INSERT INTO conversation_messages 
-                (conversation_id, timestamp, user_message, ai_response, tokens_input, 
-                tokens_output, cost, created_at, metadata)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-            """
+            # 使用原始连接和游标进行插入，以便更好地控制提交和获取错误
+            conn = self.pool.get_connection()
+            cursor = conn.cursor()
             
-            params = (conversation_id, timestamp, user_message, ai_response, 
-                     tokens_input, tokens_output, cost, now, metadata_json)
-            
-            self.execute_query(query, params)
-            
-            # 更新对话的最后活动时间
-            self.update_conversation(conversation_id)
-            
-            logger.info(f"保存对话消息成功: {conversation_id}, timestamp: {timestamp}")
-            return True
+            try:
+                query = """
+                    INSERT INTO conversation_messages 
+                    (conversation_id, timestamp, user_message, ai_response, tokens_input, 
+                    tokens_output, cost, created_at, metadata)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """
+                
+                params = (conversation_id, timestamp, user_message, ai_response, 
+                         tokens_input, tokens_output, cost, now, metadata_json)
+                
+                cursor.execute(query, params)
+                conn.commit()
+                
+                # 更新对话的最后活动时间
+                update_query = """
+                    UPDATE conversations 
+                    SET updated_at = %s 
+                    WHERE id = %s
+                """
+                cursor.execute(update_query, (now, conversation_id))
+                conn.commit()
+                
+                logger.info(f"保存对话消息成功: {conversation_id}, timestamp: {timestamp}")
+                return True
+            except Exception as e:
+                conn.rollback()
+                logger.error(f"保存对话消息SQL执行失败: {str(e)}")
+                return False
+            finally:
+                cursor.close()
+                conn.close()
             
         except Exception as e:
             logger.error(f"保存对话消息失败: {str(e)}")
