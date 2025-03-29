@@ -17,51 +17,87 @@ class TTSService:
             return
             
         # 设置API密钥
-        self.api_key = config.get("tts.api_key", "")
+        self.api_key = config.get("tts.fish_api_key", "")
         if not self.api_key:
-            logger.error("未配置ElevenLabs API密钥")
+            logger.error("未配置Fish Audio API密钥")
             self.enabled = False
             return
             
         # API配置
-        self.base_url = "https://api.elevenlabs.io/v1"
+        self.base_url = "https://api.fish.audio/v1/tts"
         self.headers = {
-            "xi-api-key": self.api_key,
-            "Accept": "audio/mpeg",
+            "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json"
         }
         
+        # 添加模型选择
+        self.model = config.get("tts.model", "speech-1.6")  # 默认使用 speech-1.6 模型
+        if self.model:
+            self.headers["model"] = self.model
+            logger.info(f"使用Fish Audio TTS模型: {self.model}")
+        
+        # 获取开发者ID（如果有）
+        self.developer_id = config.get("tts.developer_id", "")
+        if self.developer_id:
+            self.headers["developer-id"] = self.developer_id
+            logger.info(f"已设置Fish Audio开发者ID: {self.developer_id}")
+        
         # 获取配置
-        self.model_id = config.get("tts.model_id", "eleven_multilingual_v2")
-        self.voice_id = config.get("tts.voice_id", "21m00Tcm4TlvDq8ikWAM")
+        self.reference_id = config.get("tts.fish_reference_id", "")
+        if not self.reference_id:
+            logger.warning("未配置Fish Audio参考音色ID，将使用默认音色")
+        else:
+            logger.info(f"使用参考音色ID: {self.reference_id}")
         
         # 语音设置
         self.voice_settings = {
-            "stability": config.get("tts.stability", 0.5),
-            "similarity_boost": config.get("tts.similarity_boost", 0.75),
-            "style": config.get("tts.style", 0.0),
-            "use_speaker_boost": config.get("tts.use_speaker_boost", True)
+            "format": "mp3",
+            "mp3_bitrate": 128,
+            "chunk_length": 200,
+            "normalize": True,
+            "latency": "normal"
         }
         
-        logger.info("TTS服务初始化成功")
+        # 其他设置
+        self.speed = config.get("tts.speed", 1.0)
+        self.volume = config.get("tts.volume", 1.0)
+        self.pitch = config.get("tts.pitch", 0.0)
+        
+        logger.info("TTS服务初始化成功（Fish Audio）")
     
     def _prepare_request_data(
         self,
         text: str,
-        model_id: Optional[str] = None
+        reference_id: Optional[str] = None,
+        speed: Optional[float] = None,
+        volume: Optional[float] = None,
+        pitch: Optional[float] = None
     ) -> Dict[str, Any]:
         """准备请求数据"""
-        return {
+        # 基本数据
+        data = {
             "text": text,
-            "model_id": model_id or self.model_id,
-            "voice_settings": self.voice_settings
+            "format": "mp3",
+            "mp3_bitrate": 128,
+            "chunk_length": 200,
+            "normalize": True,
+            "latency": "normal"
         }
+        
+        # 添加参考音色ID
+        ref_id = reference_id if reference_id else self.reference_id
+        if ref_id:
+            data["reference_id"] = ref_id
+        
+        return data
     
     def generate_speech(
         self,
         text: str,
-        voice_id: Optional[str] = None,
-        model_id: Optional[str] = None,
+        reference_id: Optional[str] = None,
+        speed: Optional[float] = None,
+        volume: Optional[float] = None,
+        pitch: Optional[float] = None,
         output_path: Optional[str] = None
     ) -> bytes:
         """
@@ -69,8 +105,10 @@ class TTSService:
         
         Args:
             text: 要转换的文本
-            voice_id: 语音ID，不指定则使用默认值
-            model_id: 模型ID，不指定则使用默认值
+            reference_id: 参考音色ID，不指定则使用默认值
+            speed: 语速 (0.5-2.0)
+            volume: 音量 (0.1-2.0)
+            pitch: 音高 (-12.0-12.0)
             output_path: 输出文件路径，不指定则返回字节数据
             
         Returns:
@@ -80,15 +118,17 @@ class TTSService:
             raise RuntimeError("TTS服务未启用")
             
         try:
-            # 使用默认voice_id如果没有提供或提供的是None或空字符串
-            voice_id = voice_id if voice_id else self.voice_id
-            
             # 准备请求数据
-            data = self._prepare_request_data(text, model_id)
-            url = f"{self.base_url}/text-to-speech/{voice_id}"
+            data = self._prepare_request_data(
+                text=text, 
+                reference_id=reference_id
+            )
             
-            logger.info(f"正在调用ElevenLabs API，URL: {url}")
+            url = self.base_url
+            
+            logger.info(f"正在调用Fish Audio API，URL: {url}")
             logger.info(f"请求数据: {data}")
+            logger.info(f"请求头: {self.headers}")
             
             # 发送请求
             response = requests.post(url, json=data, headers=self.headers)
@@ -115,16 +155,20 @@ class TTSService:
     def stream_speech(
         self,
         text: str,
-        voice_id: Optional[str] = None,
-        model_id: Optional[str] = None
+        reference_id: Optional[str] = None,
+        speed: Optional[float] = None,
+        volume: Optional[float] = None,
+        pitch: Optional[float] = None
     ) -> Generator[bytes, None, None]:
         """
         流式生成语音
         
         Args:
             text: 要转换的文本
-            voice_id: 语音ID，不指定则使用默认值
-            model_id: 模型ID，不指定则使用默认值
+            reference_id: 参考音色ID，不指定则使用默认值
+            speed: 语速 (0.5-2.0)
+            volume: 音量 (0.1-2.0)
+            pitch: 音高 (-12.0-12.0)
             
         Returns:
             generator: 音频数据生成器
@@ -133,15 +177,17 @@ class TTSService:
             raise RuntimeError("TTS服务未启用")
             
         try:
-            # 使用默认voice_id如果没有提供或提供的是None或空字符串
-            voice_id = voice_id if voice_id else self.voice_id
-            
             # 准备请求数据
-            data = self._prepare_request_data(text, model_id)
-            url = f"{self.base_url}/text-to-speech/{voice_id}/stream"
+            data = self._prepare_request_data(
+                text=text, 
+                reference_id=reference_id
+            )
             
-            logger.info(f"正在调用ElevenLabs流式API，URL: {url}")
+            url = self.base_url
+            
+            logger.info(f"正在调用Fish Audio API，URL: {url}")
             logger.info(f"请求数据: {data}")
+            logger.info(f"请求头: {self.headers}")
             
             # 发送请求并获取流式响应
             response = requests.post(url, json=data, headers=self.headers, stream=True)

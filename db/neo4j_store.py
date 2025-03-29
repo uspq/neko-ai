@@ -254,7 +254,7 @@ class Neo4jDatabase:
                 # 如果设置不包含跨对话记忆，跳过其他对话的记忆
                 record_conversation_id = record.get("conversation_id")
                 if conversation_id is not None and record_conversation_id != conversation_id and not include_cross_conversation:
-                    continue
+                    continue 
                 
                 seen_timestamps.add(timestamp)
                 

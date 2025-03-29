@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field
 import time
 import json
 import uuid
+from pydantic import validator
 
 from services.chat_service import ChatService
 from utils.logger import get_logger
@@ -18,6 +19,13 @@ class Message(BaseModel):
     role: str = Field(..., description="消息角色: system, user, assistant, function")
     content: str = Field(..., description="消息内容")
     name: Optional[str] = Field(None, description="名称，仅在role为function时使用")
+
+    @validator('role')
+    def validate_role(cls, v):
+        allowed_roles = {'system', 'user', 'assistant', 'function'}
+        if v not in allowed_roles:
+            raise ValueError(f"消息角色必须是以下值之一: {', '.join(allowed_roles)}")
+        return v
 
 class ChatCompletionRequest(BaseModel):
     """聊天完成请求"""
@@ -35,6 +43,7 @@ class ChatCompletionRequest(BaseModel):
     use_memory: Optional[bool] = Field(True, description="是否使用记忆功能")
     use_knowledge: Optional[bool] = Field(False, description="是否使用知识库")
     use_web_search: Optional[bool] = Field(False, description="是否使用网络搜索")
+    conversation_id: Optional[int] = Field(None, description="对话ID，用于关联对话历史，不指定则为全局对话")
 
 class ChatCompletionResponseChoice(BaseModel):
     """聊天完成响应选择"""
@@ -71,16 +80,39 @@ async def chat_completions(
     ```python
     import openai
     
-    openai.api_key = "your-api-key"
-    openai.base_url = "http://localhost:9999/v1/"
+    # 初始化客户端
+    client = openai.Client(
+        api_key="your-api-key",  # 可以是任意字符串
+        base_url="http://localhost:9999/v1/"
+    )
     
-    response = openai.chat.completions.create(
+    # 基础用法
+    response = client.chat.completions.create(
+        model="neko-model",
+        messages=[
+            {"role": "system", "content": "你是一个有用的助手。"},
+            {"role": "user", "content": "你好，请介绍一下你自己"}
+        ],
+        temperature=0.7,
+        max_tokens=1000  # 必须大于0
+    )
+    print(response.choices[0].message.content)
+    
+    # 使用 Neko-AI 特有功能
+    response = client.chat.completions.create(
         model="neko-model",
         messages=[
             {"role": "system", "content": "你是一个有用的助手。"},
             {"role": "user", "content": "你好，请告诉我最新的AI进展"}
         ],
-        temperature=0.7
+        temperature=0.7,
+        max_tokens=1000,  # 必须大于0
+        extra_body={
+            "use_memory": True,      # 启用记忆功能
+            "use_web_search": True,  # 启用网络搜索
+            "use_knowledge": False,  # 是否使用知识库
+            "conversation_id": 123  # 指定对话ID (整数类型)，关联对话历史
+        }
     )
     print(response.choices[0].message.content)
     ```
@@ -98,6 +130,18 @@ async def chat_completions(
                 system_msg = msg.content
             elif msg.role == "user":
                 final_user_msg = msg.content
+            elif msg.role not in ["assistant", "function"]:
+                raise HTTPException(
+                    status_code=400,
+                    detail={
+                        "error": {
+                            "message": f"无效的消息角色: {msg.role}。必须是 system、user、assistant 或 function",
+                            "type": "invalid_request_error",
+                            "param": "messages[].role",
+                            "code": "invalid_role"
+                        }
+                    }
+                )
             
             # 将消息添加到对话上下文
             conversation_context.append({
@@ -106,7 +150,30 @@ async def chat_completions(
             })
         
         if not final_user_msg:
-            raise HTTPException(status_code=400, detail="缺少用户消息")
+            raise HTTPException(
+                status_code=400, 
+                detail={
+                    "error": {
+                        "message": "请求必须包含至少一条用户消息 (role: 'user')",
+                        "type": "invalid_request_error",
+                        "param": "messages",
+                        "code": "missing_user_message"
+                    }
+                }
+            )
+            
+        if not request.messages:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": {
+                        "message": "消息列表不能为空",
+                        "type": "invalid_request_error",
+                        "param": "messages",
+                        "code": "empty_messages"
+                    }
+                }
+            )
         
         # 调用原有的聊天服务
         chat_response = await chat_service.get_chat_response(
@@ -117,7 +184,8 @@ async def chat_completions(
             temperature=request.temperature,
             max_tokens=request.max_tokens,
             system_prompt=system_msg,  # 传递系统提示
-            conversation_context=conversation_context  # 传递对话上下文
+            conversation_context=conversation_context,  # 传递对话上下文
+            conversation_id=request.conversation_id  # 传递对话ID
         )
         
         # 构建 OpenAI 兼容响应
@@ -142,12 +210,24 @@ async def chat_completions(
             )
         )
         
-        api_logger.info(f"OpenAI 兼容聊天响应成功，tokens: {chat_response.input_tokens}(输入)/{chat_response.output_tokens}(输出)")
+        api_logger.info(f"OpenAI 兼容聊天响应成功，tokens: {chat_response.input_tokens}(输入)/{chat_response.output_tokens}(输出), 对话ID: {request.conversation_id or '默认'}")
         return response
         
+    except HTTPException as he:
+        api_logger.error(f"OpenAI 兼容聊天请求失败: {he.status_code}: {he.detail}")
+        raise he
     except Exception as e:
         api_logger.error(f"OpenAI 兼容聊天请求失败: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"处理请求失败: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": {
+                    "message": f"处理请求时发生错误: {str(e)}",
+                    "type": "internal_server_error",
+                    "code": "internal_error"
+                }
+            }
+        )
 
 @router.get("/models")
 async def list_models():

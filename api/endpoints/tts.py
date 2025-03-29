@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse, FileResponse
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, Union
 import tempfile
 import os
 
@@ -14,6 +14,10 @@ logger = get_logger("api.tts")
 class TTSRequest(BaseModel):
     """TTS请求模型"""
     text: str
+    reference_id: Optional[str] = None
+    speed: Optional[float] = None
+    volume: Optional[float] = None
+    pitch: Optional[float] = None
 
 @router.post("/generate", summary="生成语音")
 async def generate_speech(request: TTSRequest):
@@ -21,8 +25,15 @@ async def generate_speech(request: TTSRequest):
     将文本转换为语音
     
     Args:
-        request: TTS请求参数，只需要提供文本内容
-        
+        request: TTS请求参数
+            - text: 要转换的文本
+            - reference_id: 可选，参考音色ID
+            - speed: 可选，语速 (0.5-2.0)
+            - volume: 可选，音量 (0.1-2.0)
+            - pitch: 可选，音高 (-12.0-12.0)
+            
+    Help:音色id是什么？https://fish.audio/zh-CN/m/7f92f8afb8ec43bf81429cc1c9199cb1/ 中7f92f8afb8ec43bf81429cc1c9199cb1就是音色id
+    
     Returns:
         音频文件
     """
@@ -31,6 +42,10 @@ async def generate_speech(request: TTSRequest):
         with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as temp_file:
             audio = tts_service.generate_speech(
                 text=request.text,
+                reference_id=request.reference_id,
+                speed=request.speed,
+                volume=request.volume,
+                pitch=request.pitch,
                 output_path=temp_file.name
             )
             
@@ -52,14 +67,23 @@ async def stream_speech(request: TTSRequest):
     流式生成语音
     
     Args:
-        request: TTS请求参数，只需要提供文本内容
+        request: TTS请求参数
+            - text: 要转换的文本
+            - reference_id: 可选，参考音色ID
+            - speed: 可选，语速 (0.5-2.0)
+            - volume: 可选，音量 (0.1-2.0)
+            - pitch: 可选，音高 (-12.0-12.0)
         
     Returns:
         音频流
     """
     try:
         audio_stream = tts_service.stream_speech(
-            text=request.text
+            text=request.text,
+            reference_id=request.reference_id,
+            speed=request.speed,
+            volume=request.volume,
+            pitch=request.pitch
         )
         
         return StreamingResponse(
