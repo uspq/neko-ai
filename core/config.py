@@ -114,6 +114,8 @@ class Settings(BaseSettings):
     
     # 嵌入模型配置
     EMBEDDING_MODEL: str = Field("BAAI/bge-large-zh-v1.5")
+    EMBEDDING_BASE_URL: str = Field("")  # 独立的base URL，如果为空则使用API_BASE_URL
+    EMBEDDING_API_KEY: str = Field("")   # 独立的API密钥，如果为空则使用API_KEY
     EMBEDDING_TIMEOUT: int = Field(30)
     EMBEDDING_DIMENSION: int = Field(1024)
     
@@ -281,6 +283,10 @@ class Settings(BaseSettings):
             embedding_config = config["embedding"]
             if "model" in embedding_config:
                 self.EMBEDDING_MODEL = embedding_config["model"]
+            if "base_url" in embedding_config:
+                self.EMBEDDING_BASE_URL = embedding_config["base_url"]
+            if "api_key" in embedding_config:
+                self.EMBEDDING_API_KEY = embedding_config["api_key"]
             if "timeout" in embedding_config:
                 self.EMBEDDING_TIMEOUT = embedding_config["timeout"]
             if "dimension" in embedding_config:

@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException, Path, Query, UploadFile, File, BackgroundTasks
 from typing import List, Dict, Any, Optional
+import json
 
 from models.knowledge import FileUploadResponse, FileListResponse, FileDetailResponse, KnowledgeSearchRequest, KnowledgeSearchResponse
 from services.knowledge_service import knowledge_service
@@ -138,17 +139,28 @@ async def search_knowledge(request: KnowledgeSearchRequest):
     返回匹配的知识库内容
     """
     try:
+        # 记录请求体
+        request_dict = request.dict()
+        api_logger.info(f"搜索知识库请求，查询: {request.query}, 限制: {request.limit}, 文件IDs: {request.file_ids}")
+        api_logger.info(f"请求体: {json.dumps(request_dict, ensure_ascii=False)}")
+        
         results = knowledge_service.search_knowledge(
             query=request.query,
             limit=request.limit,
             file_ids=request.file_ids
         )
         
-        api_logger.info(f"搜索知识库成功，查询: {request.query}, 找到: {len(results)} 条")
-        return KnowledgeSearchResponse(
+        # 构建响应
+        response = KnowledgeSearchResponse(
             results=results,
             count=len(results)
         )
+        
+        # 记录完整响应体，不做截断处理
+        api_logger.info(f"搜索知识库成功，查询: {request.query}, 找到: {len(results)} 条")
+        api_logger.info(f"响应体: {json.dumps(response.dict(), ensure_ascii=False)}")
+        
+        return response
         
     except Exception as e:
         api_logger.error(f"搜索知识库失败: {str(e)}")

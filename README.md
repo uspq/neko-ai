@@ -10,7 +10,7 @@
 - 🌐 **网页搜索功能**：支持使用DuckDuckGo、博查等搜索引擎执行实时网络搜索，辅助回答问题
 - 📚 **知识库管理**：支持上传和管理自定义知识文档
 - 💬 **多对话管理**：支持创建和管理多个独立对话，每个对话有自己的上下文环境
-- 🎙️ **文本转语音**：集成 ElevenLabs 的高质量 TTS 服务，支持多种语音模型和实时流式生成
+- 🎙️ **文本转语音**：集成 fish audio 的高质量 TTS 服务，支持多种语音模型和实时流式生成
 - 🚀 **高性能API**：基于FastAPI的高性能API服务
 - 🔒 **安全认证**：API密钥验证机制保障服务安全
 - 📝 **灵活配置**：通过YAML/JSON配置文件灵活配置服务参数
@@ -219,11 +219,20 @@ pip install -r requirements.txt
 3. 创建数据库和用户
    ```sql
    mysql -u root -p
-   
-   CREATE DATABASE neko_ai;
+   ```
+
+
+    // 有用户就没必要创建新的用户了，直接创建一个数据库
+       ```sql
    CREATE USER 'neko_user'@'localhost' IDENTIFIED BY 'your_password';
    GRANT ALL PRIVILEGES ON neko_ai.* TO 'neko_user'@'localhost';
    FLUSH PRIVILEGES;
+   ```
+
+   ```sql
+   CREATE DATABASE neko_ai;
+      ```
+
    ```
 
 #### 3.2 Neo4j数据库配置

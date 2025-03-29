@@ -42,9 +42,13 @@ def get_embedding_from_api(text: str) -> np.ndarray:
     # 记录开始时间
     start_time = time.time()
     
+    # 决定使用哪个API基础URL和API密钥
+    base_url = settings.EMBEDDING_BASE_URL if settings.EMBEDDING_BASE_URL else settings.API_BASE_URL
+    api_key = settings.EMBEDDING_API_KEY if settings.EMBEDDING_API_KEY else settings.API_KEY
+    
     # 准备API请求
     headers = {
-        "Authorization": f"Bearer {settings.API_KEY}",
+        "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json"
     }
     
@@ -59,7 +63,7 @@ def get_embedding_from_api(text: str) -> np.ndarray:
         # 发送请求
         logger.info(f"开始请求embedding API，文本长度: {len(text)} 字符")
         response = requests.post(
-            f"{settings.API_BASE_URL}/embeddings",
+            f"{base_url}",
             headers=headers,
             json=data,
             timeout=settings.EMBEDDING_TIMEOUT
@@ -163,9 +167,13 @@ def rerank_documents(query: str, documents: List[str], top_n: int = None) -> Lis
     if not settings.RERANK_ENABLED:
         return []
     
+    # 决定使用哪个API基础URL和API密钥
+    base_url = settings.EMBEDDING_BASE_URL if settings.EMBEDDING_BASE_URL else settings.API_BASE_URL
+    api_key = settings.EMBEDDING_API_KEY if settings.EMBEDDING_API_KEY else settings.API_KEY
+    
     # 准备API请求
     headers = {
-        "Authorization": f"Bearer {settings.API_KEY}",
+        "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json"
     }
     
@@ -187,10 +195,10 @@ def rerank_documents(query: str, documents: List[str], top_n: int = None) -> Lis
     try:
         # 发送请求
         response = requests.post(
-            f"{settings.API_BASE_URL}/rerank",
+            f"{base_url}/rerank",
             headers=headers,
             json=data,
-            timeout=settings.API_TIMEOUT
+            timeout=settings.EMBEDDING_TIMEOUT
         )
         
         # 检查响应状态

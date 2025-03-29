@@ -4,9 +4,9 @@
 # API 配置
 api:
   # API密钥，用于验证API请求
-  key: "sk-jivwbgqsesocbzkggntyzjwlkvlyhuiaphesburlvyswzsfc"
+  key: "sk-8HgqJuIRsv7br3MJ300b14232d084a6c82089d660122F5F2"
   # API基础URL，不同AI服务提供商可能有不同的URL
-  base_url: "https://api.siliconflow.cn/v1"
+  base_url: "https://aiproxy.bja.sealos.run/v1"
   # API请求超时时间（秒）
   timeout: 30
   # 是否开启API密钥校验
@@ -17,7 +17,7 @@ api:
 # 模型配置
 model:
   # 使用的大语言模型名称
-  name: "Pro/deepseek-ai/DeepSeek-V3"
+  name: "deepseek-chat-0324"
   # 温度参数，控制随机性（0-1），越高越随机
   temperature: 0.7
   # 最大生成token数
@@ -33,6 +33,10 @@ model:
 embedding:
   # 使用的嵌入模型
   model: "BAAI/bge-m3"
+  # 嵌入模型的API基础URL，如果不同于主模型
+  base_url: "https://api.siliconflow.cn/v1/embeddings"
+  # API密钥，如不指定则使用默认API密钥
+  api_key: "sk-jivwbgqsesocbzkggntyzjwlkvlyhuiaphesburlvyswzsfc"  
   # 超时时间（秒）
   timeout: 100
   # 向量维度

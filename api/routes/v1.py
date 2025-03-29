@@ -40,10 +40,10 @@ class ChatCompletionRequest(BaseModel):
     frequency_penalty: Optional[float] = Field(0.0, description="频率惩罚参数")
     user: Optional[str] = Field(None, description="用户标识符")
     stream: Optional[bool] = Field(False, description="是否使用流式响应")
-    use_memory: Optional[bool] = Field(True, description="是否使用记忆功能")
+    use_memory: Optional[bool] = Field(True, description="是否使用记忆功能,默认使用")
     use_knowledge: Optional[bool] = Field(False, description="是否使用知识库")
     use_web_search: Optional[bool] = Field(False, description="是否使用网络搜索")
-    conversation_id: Optional[int] = Field(None, description="对话ID，用于关联对话历史，不指定则为全局对话")
+    conversation_id: Optional[int] = Field(1, description="对话ID，用于关联对话历史，默认为1")
 
 class ChatCompletionResponseChoice(BaseModel):
     """聊天完成响应选择"""
@@ -118,7 +118,12 @@ async def chat_completions(
     ```
     """
     try:
+        # 记录请求体
+        request_id = f"req_{int(time.time())}"
+        
+        # 记录完整请求信息，不再截断内容
         api_logger.info(f"OpenAI 兼容聊天请求: model={request.model}, 消息数量={len(request.messages)}")
+        api_logger.info(f"请求体: {json.dumps(request.dict(), ensure_ascii=False)}")
         
         # 提取用户消息
         final_user_msg = None
@@ -210,7 +215,10 @@ async def chat_completions(
             )
         )
         
+        # 记录完整响应内容，不再截断
         api_logger.info(f"OpenAI 兼容聊天响应成功，tokens: {chat_response.input_tokens}(输入)/{chat_response.output_tokens}(输出), 对话ID: {request.conversation_id or '默认'}")
+        api_logger.info(f"响应内容: {json.dumps(response.dict(), ensure_ascii=False)}")
+        
         return response
         
     except HTTPException as he:

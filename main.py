@@ -41,18 +41,30 @@ async def add_process_time_header(request: Request, call_next):
     start_time = time.time()
     
     try:
+        # 生成请求ID
+        request_id = f"req_{int(time.time())}"
+        
+        # 记录基本请求信息，不读取请求体
+        api_logger.info(
+            f"[{request_id}] 请求开始: {request.method} {request.url.path} "
+            f"- 客户端: {request.client.host}"
+        )
+        
+        # 处理响应
         response = await call_next(request)
+        
+        # 记录响应信息
         process_time = time.time() - start_time
         response.headers["X-Process-Time"] = str(process_time)
         
-        # 记录API请求
         api_logger.info(
-            f"{request.method} {request.url.path} "
-            f"- Status: {response.status_code} "
-            f"- Process Time: {process_time:.4f}s"
+            f"[{request_id}] 响应: {request.method} {request.url.path} "
+            f"- 状态码: {response.status_code} "
+            f"- 处理时间: {process_time:.4f}s"
         )
         
         return response
+        
     except Exception as e:
         process_time = time.time() - start_time
         api_logger.error(

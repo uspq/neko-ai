@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from typing import List, Dict, Any
+import json
 
 from models.chat import ChatRequest, ChatResponse, TokenCost
 from models.conversation import ConversationChatRequest
@@ -33,7 +34,9 @@ async def chat(request: ChatRequest):
     返回AI回复及相关信息
     """
     try:
-        api_logger.info(f"聊天请求: {request.message[:50]}..., 对话ID: {request.conversation_id or '全局'}")
+        # 记录完整请求体，不做截断处理
+        api_logger.info(f"聊天请求: 对话ID: {request.conversation_id or '全局'}")
+        api_logger.info(f"请求体: {json.dumps(request.dict(), ensure_ascii=False)}")
         
         # 如果指定了对话ID，检查对话是否存在
         if request.conversation_id:
@@ -56,7 +59,10 @@ async def chat(request: ChatRequest):
             conversation_files=request.conversation_files
         )
         
+        # 记录完整响应体，不做截断处理
         api_logger.info(f"聊天响应成功，tokens: {response.input_tokens}(输入)/{response.output_tokens}(输出)")
+        api_logger.info(f"响应体: {json.dumps(response.dict(), ensure_ascii=False)}")
+        
         return response
         
     except Exception as e:
@@ -84,7 +90,9 @@ async def conversation_chat(request: ConversationChatRequest):
     返回AI回复及相关信息，并自动保存到对话历史中
     """
     try:
-        api_logger.info(f"对话聊天请求: {request.message[:50]}..., 对话ID: {request.conversation_id}")
+        # 记录完整请求体，不做截断处理
+        api_logger.info(f"对话聊天请求: 对话ID: {request.conversation_id}")
+        api_logger.info(f"请求体: {json.dumps(request.dict(), ensure_ascii=False)}")
         
         # 检查对话是否存在
         conversation = conversation_service.get_conversation(request.conversation_id)
@@ -129,7 +137,10 @@ async def conversation_chat(request: ConversationChatRequest):
             conversation_id=request.conversation_id
         )
         
+        # 记录完整响应体，不做截断处理
         api_logger.info(f"对话聊天响应成功，对话ID: {request.conversation_id}, tokens: {response.input_tokens}(输入)/{response.output_tokens}(输出)")
+        api_logger.info(f"响应体: {json.dumps(response.dict(), ensure_ascii=False)}")
+        
         return response
         
     except Exception as e:
